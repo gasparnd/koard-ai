@@ -48,13 +48,21 @@ The state machine does not execute models, write event logs, or authorize delive
 
 The contract does not choose storage, generate identities, or infer event meaning from text. The future orchestrator will create records from accepted state transitions and validated handoff outcomes. See `events.md` for the wire format.
 
+## Runtime adapters
+
+`internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role.
+
+This adapter is proposal-only. It requires OpenCode 2.2.3 or newer, disables snapshots, denies every tool by default, permits only repository `read`, `glob`, and `grep`, and disables MCP servers, skills, plugins, and web search for the run. It never enables auto-approval, worktrees, or session continuation. The adapter does not route roles, persist workflow state, create candidate identities, mutate the workspace, or authorize delivery.
+
+The capability guard travels as inline OpenCode configuration. OpenCode evaluates managed and Console policy after that inline configuration, so an administrator or connected workspace allow can widen the guard. Because the adapter never passes auto-approval, any permission that survives the guard still fails instead of being granted in the non-interactive run.
+
 ## Project layout
 
 ```text
 cmd/koard/        CLI executable
 internal/cli/     Command routing and user-facing behavior
 internal/core/    Future provider-independent contracts
-internal/adapters Future runtime and service integrations
+internal/adapters Runtime and service integrations
 .koard/           Project-level Koard configuration
 skills/           Project skills and local references
 docs/             Human and agent documentation

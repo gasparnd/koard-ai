@@ -95,6 +95,8 @@ The implementation in `internal/core/handoff`:
 - binds each result to its request identity and destination role;
 - emits deterministic indented JSON from typed Go values.
 
-## Next dependency
+## Runtime adapter boundary
 
-The ODD workflow state machine will use these contracts to authorize and record transitions. Runtime adapters come later and must implement the protocol without changing its semantics.
+The proposal-only OpenCode adapter implements this protocol without changing its semantics. It validates a request before invocation, permits only the `repository:read` capability, requires a JSON result, and applies the same strict decoding and identity/role binding described above.
+
+The adapter does not authorize the next transition returned by a model. Agent routing and workflow persistence remain later orchestration responsibilities.
