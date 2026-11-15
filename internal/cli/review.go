@@ -16,8 +16,9 @@ const configDirEnv = "KOARD_CONFIG_DIR"
 
 const reviewMutationLock = ".review-mutation.lock"
 
-const reviewUsage = `usage: koard review mode <status|enable|disable> [--scope clone|global]
-       koard review consent <status|grant|decline> --workflow <id>`
+const reviewModeUsage = "usage: koard review mode <status|enable|disable> [--scope clone|global]"
+const reviewConsentUsage = "usage: koard review consent <status|grant|decline> --workflow <id>"
+const reviewUsage = reviewModeUsage + "\n       koard review consent <status|grant|decline> --workflow <id>"
 
 // usageError marks a malformed command line, which exits with code 2.
 type usageError struct{ message string }
@@ -29,7 +30,16 @@ func runReview(args []string, cwd string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "koard review: %v\n", err)
 		var usage usageError
 		if errors.As(err, &usage) {
-			fmt.Fprintln(stderr, reviewUsage)
+			usageText := reviewUsage
+			if len(args) > 0 {
+				switch args[0] {
+				case "mode":
+					usageText = reviewModeUsage
+				case "consent":
+					usageText = reviewConsentUsage
+				}
+			}
+			fmt.Fprintln(stderr, usageText)
 			return 2
 		}
 		return 1
