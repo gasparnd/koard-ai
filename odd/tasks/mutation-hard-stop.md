@@ -14,9 +14,14 @@ Objective: make every mutating capability mechanically unusable before an apply 
 
 ## Tasks
 
-- [ ] T1 — S1-S5, S7 — route: inline (no writer trigger; one coherent behavior) — risk: item 2 (a security guard) — commit: pending.
+- [x] T1 — S1-S5, S7 — route: inline (no writer trigger; one coherent behavior) — risk: item 2 (a security guard) — commit: `93deed3`.
 
 ## Log
 
 - L1 (2026-11-15): "vamos con el freno de mano", continuing `docs/roadmap.md` after the candidate identity work unit closed.
 - L2 (2026-11-15): Inspection found the OpenCode adapter already rejected non-read capabilities with a hardcoded comparison in `validateProposalRequest`. Leaving it there would mean two guards that can drift, so the duplicate is replaced by one shared guard.
+- L3 (2026-11-15): RED observed with an undefined `Capabilities` field and an unknown `mutation` package, then GREEN in `internal/core/mutation/mutation.go`, the router guard, and the adapter call site.
+- L4 (2026-11-15): Independent verification ran and returned PASS on S2-S7 with no blockers. Its strongest evidence was a defused-guard experiment: with `RequireReadOnly` forced to allow everything, the router and adapter tests failed, which proves the tests bite. Removing each call site separately failed only that call site's tests, so both are pinned.
+- L5 (2026-11-15): The verifier found one real defect: `BlockedError` rendered an empty capability as nothing, so the message named no value. Fixed with quoted rendering, and pinned by a table of values designed to look like the read capability.
+- L6 (2026-11-15): The verifier's probe for an untouched state root was folded into `TestRouteRejectsMutatingCapabilitiesBeforeTouchingState`, which now asserts the whole state directory is empty instead of only the workflow directory.
+- L7 (2026-11-15): Verification: focused tests, full suite with `-count=1`, `go vet ./...`, and `gofmt -l` all clean. Independent verification unavailable items remain: a live end-to-end refusal through a real OpenCode subprocess, which needs an authorized invocation.
