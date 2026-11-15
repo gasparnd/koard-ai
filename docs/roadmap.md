@@ -29,7 +29,9 @@ Koard will build one real but non-mutating orchestration path before RDD. RDD wi
 - [x] Persist typed handoffs and structured events for one workflow.
 - [x] Produce a candidate proposal with a deterministic identity.
 - [x] Enforce a hard stop before workspace mutation, commit, push, pull request, merge, or release.
-- [ ] Verify replay, idempotency, cancellation, crash recovery, and stale-candidate rejection.
+- [x] Verify that a failed or cancelled run leaves a terminal workflow record.
+
+Replay, idempotency, and recovery after the Koard process dies move to controlled mutation, because read-only runs reconcile nothing and a retry uses a new workflow identity. Stale-candidate rejection moves to receipt-driven development, because the candidate identity binds declared references, not the bytes an immutable snapshot will capture.
 
 ### 2. Receipt-driven development
 
@@ -39,6 +41,7 @@ Koard will build one real but non-mutating orchestration path before RDD. RDD wi
 - [ ] Explicit consent bound to the exact candidate snapshot.
 - [ ] Independent review with a bounded correction lifecycle.
 - [ ] Verifiable receipt tied to the reviewed candidate.
+- [ ] Reject a stale candidate whose snapshot no longer matches the reviewed one.
 - [ ] Verify snapshot integrity, reviewer independence, consent binding, and correction limits.
 
 ### 3. Controlled mutation
@@ -46,6 +49,7 @@ Koard will build one real but non-mutating orchestration path before RDD. RDD wi
 - [ ] Apply only the exact candidate snapshot that completed the required RDD path.
 - [ ] Handle partial writes, interruption, and recovery deterministically.
 - [ ] Keep commit, push, pull request, merge, and release outside receipt authority.
+- [ ] Verify replay, idempotency, and recovery when the Koard process dies mid-run.
 
 ### 4. Orchestration expansion
 
