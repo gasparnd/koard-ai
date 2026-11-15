@@ -97,7 +97,7 @@ Only `repo://` artifacts can be captured. The path must be canonical and relativ
 | `high` | `agent_escalation` | The caller cites high-risk item 1-6 with a reason; escalation only raises |
 | `high` | `unassessable` | The snapshot cannot be loaded and verified |
 
-The tier is the highest any artifact or escalation reaches, and the reasons list only that tier's signals, in artifact order, without duplicates. Size never changes the tier. `review_due` is true only for `high`. The router stores the assessment as `risk` in `workflow.json` beside the candidate. Candidate-bound consent reports and records the tier; independent review does not consume it yet. Commit-slice budgeting is not part of the current roadmap.
+The tier is the highest any artifact or escalation reaches, and the reasons list only that tier's signals, in artifact order, without duplicates. Size never changes the tier. `review_due` is true only for `high`. The router stores the assessment as `risk` in `workflow.json` beside the candidate. Candidate-bound consent and the independent-review target preserve the tier as part of their exact binding. Commit-slice budgeting is not part of the current roadmap.
 
 ## Mutation boundary
 
@@ -118,6 +118,14 @@ The boundary covers what no code path performs yet. Nothing in Koard commits, pu
 One versioned `consent.json` file under the workflow run directory records `granted` or `declined` with the authority `review`. Publication is atomic and never replaces an existing record. Repeating the same decision is idempotent; a conflicting decision or target mismatch fails closed. A decline affects only that candidate snapshot. A grant permits only independent review of those exact stored bytes: correction, workspace mutation, commit, push, pull request, merge, and release remain unauthorized.
 
 The CLI resolves the target by workflow identity through `koard review consent <status|grant|decline> --workflow <id>`. `status` never writes. Grant and decline require review mode to be on. Review-mode writes and consent decisions share one global cross-process lock, so disabling review mode cannot complete between the consent check and publication. A stale lock fails closed instead of guessing that no operation is active. See `consent.md`.
+
+## Independent review lifecycle
+
+`internal/core/review` owns provider-neutral review state. Before claiming a lifecycle it reuses `internal/core/consent` to require a granted decision and to verify the exact workflow, candidate, snapshot, risk tier, manifest, and blobs. This ordering matters: refused authority or corrupt evidence leaves no review state and spends no provider work.
+
+After validation, one atomic directory claim creates `review/`. The core persists an immutable request before calling a reviewer and accepts only a strict result bound to that request's target and attempt. Reviewer identity comes from trusted application configuration and is present in the request and lifecycle, but deliberately absent from model output. The model can report findings and a verdict; it cannot choose its identity, capabilities, state transition, correction budget, or delivery authority.
+
+The initial lifecycle supports `approved`, `rejected`, `correction_required`, and diagnosable `failed` outcomes. `correction_required` writes an exact request and pauses. Review consent still does not authorize correction: a later core slice and public command must record a separate candidate-scoped decision before any proposal-only correction can run. See `independent-review.md`.
 
 ## Runtime adapters
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role.
