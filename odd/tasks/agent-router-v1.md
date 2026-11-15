@@ -15,7 +15,7 @@ Objective: route one workflow through the fixed planner → executor → verifie
 
 ## Tasks
 
-- [x] T1 — S1-S8 — route: inline (no writer trigger; one coherent behavior) — risk: item 6 (routing logic must be pinned by tests) — evidence: `go test ./internal/core/agentrouter`, `go test ./...`, `go vet ./...` all pass; commit: pending.
+- [x] T1 — S1-S8 — route: inline (no writer trigger; one coherent behavior) — risk: item 6 (routing logic must be pinned by tests) — evidence: `go test ./internal/core/agentrouter`, `go test ./...`, `go vet ./...` all pass; commit: `f203f63`.
 
 ## Log
 
@@ -27,3 +27,4 @@ Objective: route one workflow through the fixed planner → executor → verifie
 - L6 (2026-11-15): Self-review caught a path-traversal hole: `WorkflowID` reached `filepath.Join` unvalidated. Added a single-path-segment guard with traversal and nested-path tests.
 - L7 (2026-11-15): Workflow identity is claimed with atomic `os.Mkdir`, so a concurrent or replayed run fails instead of interleaving state files. Accumulated branch size now exceeds the 400-line planning heuristic; the delivery strategy decision stays open until a pull request is actually prepared.
 - L8 (2026-11-15): Verification: focused package test, full suite, `go vet ./...`, and `gofmt -l` all clean.
+- L9 (2026-11-15): Work unit committed as `f203f63`. RDD assessment and the post-commit review follow-up are pending.
