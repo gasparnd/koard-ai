@@ -37,8 +37,7 @@ Replay, idempotency, and recovery after the Koard process dies move to controlle
 
 - [x] User-owned `enable`, `disable`, and `status` review mode.
 - [x] Immutable candidate snapshot and identity binding.
-- [ ] Immutable candidate snapshot and identity binding.
-- [ ] Candidate risk assessment with passive, medium, and high tiers.
+- [x] Candidate risk assessment with passive, medium, and high tiers.
 - [ ] Explicit consent bound to the exact candidate snapshot.
 - [ ] Independent review with a bounded correction lifecycle.
 - [ ] Verifiable receipt tied to the reviewed candidate.

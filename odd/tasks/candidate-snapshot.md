@@ -21,6 +21,8 @@ Objective: capture the exact bytes a candidate proposes, so later review, consen
 
 ## Log
 
+Historical record only: external tool names and commands below identify tools used during development. They are not runtime dependencies or requirements for using Koard.
+
 - L1 (2026-11-15): "Listo, sigamos con la siguiente tarea del roadmap".
 - L2 (2026-11-15): Task 2.1 is committed as `57ce7d5` on `task/2.1-review-mode` and pushed, but not yet merged into the step branch, which is not on origin. Task 2.2 does not depend on it, so it branches from the step tip `90a6810`.
 - L3 (2026-11-15): Documented artifact URIs are `repo://<path>`; evidence uses `command://`. `TestRouteCarriesPreviousResultToNextHandoff` uses `koard://proposals/task-1`, which S2 now refuses, so its fixture moves to a real `repo://` file.

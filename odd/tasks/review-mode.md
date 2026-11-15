@@ -5,7 +5,7 @@ Objective: give the user a switch that decides whether receipt-driven developmen
 ## Specs
 
 1. S1 — Roadmap outcome: "User-owned `enable`, `disable`, and `status` review mode."
-2. S2 — User decision: "Global + clon (Recommended)": "Igual que gentle-ai: un archivo global del usuario (directorio de config del sistema) y uno local del clon en .koard/state/ (ignorado por git). Si cualquiera de los dos dice off, gana off. Sin decisión, el default es on. status solo lee y muestra qué fuente decidió."
+2. S2 — Koard stores a global setting in the operating system's user configuration directory and a clone-local setting in git-ignored `.koard/state/`. Either scope set to `off` disables the effective mode; with no decision, the default is `on`. `status` only reads and reports the deciding source. The original decision is preserved in the historical log.
 3. S3 — `koard review mode status` prints the effective mode, the source that decided it (`default`, `global`, or `clone`), and the value of each scope. It never creates or changes a file.
 4. S4 — `koard review mode enable` and `koard review mode disable` accept `--scope clone` or `--scope global`, write that scope, and print the resulting status. Assumption: the scope defaults to `clone`, so a change outside the current project needs an explicit flag. When the requested mode is not the effective one, the output says which scope keeps it.
 5. S5 — Resolution: off wins. A clone `off` decides first, then a global `off`, then a clone `on`, then a global `on`; with nothing set the mode is `on`, decided by `default`.
@@ -21,9 +21,12 @@ Objective: give the user a switch that decides whether receipt-driven developmen
 
 ## Log
 
+Historical record only: external tool names and comparisons below document prior decisions and verification. They are not runtime dependencies or additional Koard requirements.
+
 - L1 (2026-11-15): "Listo, sigamos con el siguiente paso del roadmap".
 - L2 (2026-11-15): Step 1 merged into `develop` as `90a6810`. `koard.yaml` cannot carry the mode without schema version 2, and it is committed, so a repository change could flip a user-owned switch. `.koard/state/` is ignored by git, which makes it the clone-local location.
 - L3 (2026-11-15): RED observed: nine of ten new CLI tests failed because `review` was an unknown command. `TestReviewModeUsageErrors` already passed for the same reason, so it pins exit code `2` instead of proving the new parser.
 - L4 (2026-11-15): GREEN with `internal/core/reviewmode` (resolution, strict setting files, atomic writes) and `internal/cli/review.go`. `go test ./...`, `go vet ./...`, and `gofmt -l internal cmd` clean.
 - L5 (2026-11-15): Guard check in a scratch copy: moving the global-off case after clone-on made `TestReviewModeGlobalOffWinsOverCloneOn` fail, so the off-wins rule is pinned. A built binary run against a scratch project and `KOARD_CONFIG_DIR` printed the documented output and wrote `{"schema_version":1,"mode":"off"}`.
 - L6 (2026-11-15): `docs/architecture.md` still listed cancellation as later work after task 1.6; corrected in this change.
+- L7 (2026-11-15): Documentation independence cleanup moved the original S2 quotation here without changing behavior: "Global + clon (Recommended)": "Igual que gentle-ai: un archivo global del usuario (directorio de config del sistema) y uno local del clon en .koard/state/ (ignorado por git). Si cualquiera de los dos dice off, gana off. Sin decisión, el default es on. status solo lee y muestra qué fuente decidió."
