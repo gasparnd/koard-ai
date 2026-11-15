@@ -221,6 +221,20 @@ func TestReviewModeUsageErrors(t *testing.T) {
 	assertMissing(t, fixture.globalPath())
 }
 
+func TestReviewModeUsagePreservesModeSpecificHelp(t *testing.T) {
+	fixture := newReviewFixture(t)
+	var stderr bytes.Buffer
+	code := Run([]string{"review", "mode", "toggle"}, fixture.project, &bytes.Buffer{}, &stderr)
+	if code != 2 {
+		t.Fatalf("expected exit code 2, got %d", code)
+	}
+	want := "koard review: unknown review mode action \"toggle\"\n" +
+		"usage: koard review mode <status|enable|disable> [--scope clone|global]\n"
+	if stderr.String() != want {
+		t.Fatalf("unexpected mode usage:\nwant: %q\n got: %q", want, stderr.String())
+	}
+}
+
 func TestHelpListsReviewMode(t *testing.T) {
 	t.Parallel()
 

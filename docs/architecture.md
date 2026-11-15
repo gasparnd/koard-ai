@@ -80,7 +80,7 @@ The router records the candidate in `workflow.json` as soon as the executor hop 
 
 Only `repo://` artifacts can be captured. The path must be canonical and relative, must stay inside the workspace after resolving symlinks, and must name a regular file; the file opened must be the file validated. A declared digest must match the captured bytes. A single artifact may hold at most 8 MiB and a snapshot at most 32 MiB in total, which bounds the memory a capture uses. Capture observes cancellation before reading each artifact and before publishing each blob; a run cancelled during capture records `KOARD_WORKFLOW_CANCELLED` instead of a refusal. Every artifact is checked before anything is written, so any refusal fails the run with a `KOARD_SNAPSHOT_REFUSED` diagnostic, records no candidate, and leaves no manifest. Blobs and the manifest are published atomically and never overwritten.
 
-`snapshot.Load` verifies a stored snapshot against the identity a candidate recorded: the manifest must hash to it and every blob must still match its digest. Evidence stays declared, and the verifier does not yet receive the snapshot. Consent binding, stale-candidate rejection, and applying a candidate remain later work.
+`snapshot.Load` verifies a stored snapshot against the identity a candidate recorded: the manifest must hash to it and every blob must still match its digest. Evidence stays declared, and the verifier does not yet receive the snapshot. Candidate-bound consent now verifies this stored snapshot before recording a decision; stale-candidate rejection and applying a candidate remain later work.
 
 ## Risk assessment
 
@@ -97,7 +97,7 @@ Only `repo://` artifacts can be captured. The path must be canonical and relativ
 | `high` | `agent_escalation` | The caller cites high-risk item 1-6 with a reason; escalation only raises |
 | `high` | `unassessable` | The snapshot cannot be loaded and verified |
 
-The tier is the highest any artifact or escalation reaches, and the reasons list only that tier's signals, in artifact order, without duplicates. Size never changes the tier. `review_due` is true only for `high`. The router stores the assessment as `risk` in `workflow.json` beside the candidate. Nothing consumes the tier yet; candidate-bound consent and independent review remain planned in the [roadmap](roadmap.md). Commit-slice budgeting is not part of the current roadmap.
+The tier is the highest any artifact or escalation reaches, and the reasons list only that tier's signals, in artifact order, without duplicates. Size never changes the tier. `review_due` is true only for `high`. The router stores the assessment as `risk` in `workflow.json` beside the candidate. Candidate-bound consent reports and records the tier; independent review does not consume it yet. Commit-slice budgeting is not part of the current roadmap.
 
 ## Mutation boundary
 
@@ -109,7 +109,15 @@ The boundary covers what no code path performs yet. Nothing in Koard commits, pu
 
 ## Review mode
 
-`internal/core/reviewmode` owns the user's switch for receipt-driven development. Two setting files decide it: a global one in the user's configuration directory and a clone-local one in `.koard/state/`, which git ignores. Off wins over on, and with nothing set the mode is on. The committed `koard.yaml` cannot carry the mode, so a repository change can never flip it. A setting file that cannot be trusted is an error, never a silent "on". Nothing consumes the mode yet; it exists so the switch is in the user's hands before any review does. See `review-mode.md`.
+`internal/core/reviewmode` owns the user's switch for receipt-driven development. Two setting files decide it: a global one in the user's configuration directory and a clone-local one in `.koard/state/`, which git ignores. Off wins over on, and with nothing set the mode is on. The committed `koard.yaml` cannot carry the mode, so a repository change can never flip it. A setting file that cannot be trusted is an error, never a silent "on". New candidate consent decisions require the effective mode to be on; status remains readable. See `review-mode.md`.
+
+## Candidate-bound consent
+
+`internal/core/consent` resolves one completed workflow into an exact target containing the workflow, candidate, and snapshot identities plus its risk tier. Resolution strictly decodes `workflow.json`, requires the candidate and risk assessment to bind the same snapshot, and verifies the immutable manifest and every blob before a decision can be recorded.
+
+One versioned `consent.json` file under the workflow run directory records `granted` or `declined` with the authority `review`. Publication is atomic and never replaces an existing record. Repeating the same decision is idempotent; a conflicting decision or target mismatch fails closed. A decline affects only that candidate snapshot. A grant permits only independent review of those exact stored bytes: correction, workspace mutation, commit, push, pull request, merge, and release remain unauthorized.
+
+The CLI resolves the target by workflow identity through `koard review consent <status|grant|decline> --workflow <id>`. `status` never writes. Grant and decline require review mode to be on. Review-mode writes and consent decisions share one global cross-process lock, so disabling review mode cannot complete between the consent check and publication. A stale lock fails closed instead of guessing that no operation is active. See `consent.md`.
 
 ## Runtime adapters
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role.
