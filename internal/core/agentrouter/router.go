@@ -2,11 +2,13 @@ package agentrouter
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +18,10 @@ import (
 )
 
 const CurrentSchemaVersion = 1
+
+// ResultReferenceKind identifies a context reference that points at the
+// persisted result of the previous handoff.
+const ResultReferenceKind = "koard.handoff.result"
 
 // Step is one hop of the fixed route: the originating role and the role that
 // must respond.
@@ -94,9 +100,10 @@ func Route(ctx context.Context, options Options) (Outcome, error) {
 	}
 	sequence := uint64(0)
 	objective := options.Objective
+	var carried []handoff.Reference
 
 	for index, step := range FixedRoute {
-		request, err := newRequest(options, step, index+1, objective)
+		request, err := newRequest(options, step, index+1, objective, carried)
 		if err != nil {
 			return Outcome{}, err
 		}
@@ -105,7 +112,7 @@ func Route(ctx context.Context, options Options) (Outcome, error) {
 		if err := writeEvent(writer, record(options, sequence, "handoff.started", "Handoff started.", request.ID)); err != nil {
 			return Outcome{}, err
 		}
-		if err := writeJSON(filepath.Join(handoffDir, fmt.Sprintf("%d-request.json", index+1)), request); err != nil {
+		if _, err := writeJSON(filepath.Join(handoffDir, fmt.Sprintf("%d-request.json", index+1)), request); err != nil {
 			return Outcome{}, err
 		}
 
@@ -122,7 +129,8 @@ func Route(ctx context.Context, options Options) (Outcome, error) {
 		if err := writeEvent(writer, record(options, sequence, "handoff.completed", "Handoff completed.", request.ID)); err != nil {
 			return Outcome{}, err
 		}
-		if err := writeJSON(filepath.Join(handoffDir, fmt.Sprintf("%d-result.json", index+1)), result); err != nil {
+		encoded, err := writeJSON(filepath.Join(handoffDir, fmt.Sprintf("%d-result.json", index+1)), result)
+		if err != nil {
 			return Outcome{}, err
 		}
 
@@ -133,10 +141,25 @@ func Route(ctx context.Context, options Options) (Outcome, error) {
 		if result.Status != handoff.StatusCompleted {
 			return persistOutcome(workflowDir, outcome)
 		}
+		// The next handoff must verify the artifact this one produced, so the
+		// persisted result travels as a digest-bound context reference.
+		carried = resultReferences(index+1, encoded, result)
 		objective = fmt.Sprintf("Verify the result of the previous handoff for: %s", options.Objective)
 	}
 
 	return persistOutcome(workflowDir, outcome)
+}
+
+// resultReferences binds the next handoff to the exact bytes this one wrote:
+// the persisted result file plus any artifact the responder declared.
+func resultReferences(step int, encoded []byte, result handoff.Result) []handoff.Reference {
+	references := make([]handoff.Reference, 0, 1+len(result.Artifacts))
+	references = append(references, handoff.Reference{
+		Kind:   ResultReferenceKind,
+		URI:    path.Join("handoffs", fmt.Sprintf("%d-result.json", step)),
+		Digest: fmt.Sprintf("sha256:%x", sha256.Sum256(encoded)),
+	})
+	return append(references, result.Artifacts...)
 }
 
 func validateOptions(options Options) (Options, error) {
@@ -171,7 +194,7 @@ func validateWorkflowID(id string) error {
 	return nil
 }
 
-func newRequest(options Options, step Step, index int, objective string) (handoff.Request, error) {
+func newRequest(options Options, step Step, index int, objective string, carried []handoff.Reference) (handoff.Request, error) {
 	request := handoff.Request{
 		SchemaVersion: handoff.CurrentSchemaVersion,
 		ID:            fmt.Sprintf("%s-%d", options.WorkflowID, index),
@@ -179,6 +202,7 @@ func newRequest(options Options, step Step, index int, objective string) (handof
 		From:          step.From,
 		To:            step.To,
 		Objective:     objective,
+		Context:       carried,
 		Capabilities:  []string{"repository:read"},
 		ExpectedOutput: handoff.OutputContract{
 			Format: "application/json",
@@ -230,18 +254,21 @@ func writeDiagnostic(writer *eventstream.Writer, record eventstream.Record, caus
 }
 
 func persistOutcome(workflowDir string, outcome Outcome) (Outcome, error) {
-	if err := writeJSON(filepath.Join(workflowDir, "workflow.json"), outcome); err != nil {
+	if _, err := writeJSON(filepath.Join(workflowDir, "workflow.json"), outcome); err != nil {
 		return Outcome{}, err
 	}
 	return outcome, nil
 }
 
-func writeJSON(path string, value any) error {
+func writeJSON(filePath string, value any) ([]byte, error) {
 	encoded, err := marshal(value)
 	if err != nil {
-		return fmt.Errorf("encode %s: %w", filepath.Base(path), err)
+		return nil, fmt.Errorf("encode %s: %w", filepath.Base(filePath), err)
 	}
-	return writeFileAtomic(path, encoded)
+	if err := writeFileAtomic(filePath, encoded); err != nil {
+		return nil, err
+	}
+	return encoded, nil
 }
 
 func marshal(value any) ([]byte, error) {

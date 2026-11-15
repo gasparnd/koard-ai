@@ -1,10 +1,13 @@
 package agentrouter
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -221,6 +224,89 @@ func TestRouteSecondObjectiveReferencesOriginal(t *testing.T) {
 	}
 }
 
+func TestRouteCarriesPreviousResultToNextHandoff(t *testing.T) {
+	t.Parallel()
+
+	artifact := handoff.Reference{Kind: "proposal", URI: "koard://proposals/task-1", Digest: "sha256:proposal"}
+	runner := &fakeRunner{artifacts: []handoff.Reference{artifact}}
+	options := testOptions(t, runner)
+	outcome, err := Route(context.Background(), options)
+	if err != nil {
+		t.Fatalf("route workflow: %v", err)
+	}
+
+	if len(runner.requests[0].Context) != 0 {
+		t.Fatalf("the first handoff must not claim prior context, got %#v", runner.requests[0].Context)
+	}
+	context := runner.requests[1].Context
+	if len(context) != 2 {
+		t.Fatalf("expected the result reference plus the propagated artifact, got %#v", context)
+	}
+	if context[0].Kind != "koard.handoff.result" || context[0].URI != "handoffs/1-result.json" {
+		t.Fatalf("unexpected result reference: %#v", context[0])
+	}
+	if context[1] != artifact {
+		t.Fatalf("the executor artifact was not propagated: %#v", context[1])
+	}
+
+	persisted := readFile(t, filepath.Join(options.StateDir, options.WorkflowID, "handoffs", "1-result.json"))
+	if context[0].Digest != "sha256:"+digestOf(persisted) {
+		t.Fatalf("reference digest %q does not match the persisted result", context[0].Digest)
+	}
+	if encoded, err := handoff.MarshalResult(outcome.Results[0]); err != nil || !bytes.Equal(encoded, persisted) {
+		t.Fatalf("persisted result is not the bound result bytes (err=%v)", err)
+	}
+}
+
+func TestRouteContextDigestIsUniquePerHandoff(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{}
+	options := testOptions(t, runner)
+	if _, err := Route(context.Background(), options); err != nil {
+		t.Fatalf("route workflow: %v", err)
+	}
+	for index, request := range runner.requests {
+		if len(request.Context) > 1 {
+			t.Fatalf("handoff %d carries unexpected extra context: %#v", index+1, request.Context)
+		}
+	}
+	if got := len(runner.requests[1].Context); got != 1 {
+		t.Fatalf("expected exactly one result reference on the second handoff, got %d", got)
+	}
+	if digest := runner.requests[1].Context[0].Digest; digest == "" || digest == "sha256:"+digestOf(nil) {
+		t.Fatalf("empty result reference digest: %q", digest)
+	}
+}
+
+func TestDecodeRecordsRejectsCorruptStream(t *testing.T) {
+	t.Parallel()
+
+	var buffer bytes.Buffer
+	writer := eventstream.NewWriter(&buffer)
+	record := validRecordForTest()
+	if err := writer.Write(record); err != nil {
+		t.Fatalf("write record: %v", err)
+	}
+	buffer.WriteString("{not json}\n")
+
+	if _, err := decodeRecords(&buffer); err == nil {
+		t.Fatal("a corrupt event line must not be treated as end of stream")
+	}
+}
+
+func TestDecodeRecordsAcceptsEmptyStream(t *testing.T) {
+	t.Parallel()
+
+	records, err := decodeRecords(strings.NewReader(""))
+	if err != nil {
+		t.Fatalf("empty stream must decode cleanly: %v", err)
+	}
+	if len(records) != 0 {
+		t.Fatalf("empty stream produced %d records", len(records))
+	}
+}
+
 func testOptions(t *testing.T, runner Runner) Options {
 	t.Helper()
 
@@ -248,19 +334,55 @@ func readOutcome(t *testing.T, path string) Outcome {
 	return outcome
 }
 
-func readRecords(t *testing.T, path string) []eventstream.Record {
-	t.Helper()
-
-	decoder := eventstream.NewDecoder(openFile(t, path))
+func decodeRecords(reader io.Reader) ([]eventstream.Record, error) {
+	decoder := eventstream.NewDecoder(reader)
 	var records []eventstream.Record
 	for {
 		record, err := decoder.Next()
+		if errors.Is(err, io.EOF) {
+			return records, nil
+		}
 		if err != nil {
-			break
+			return nil, err
 		}
 		records = append(records, record)
 	}
+}
+
+func readRecords(t *testing.T, path string) []eventstream.Record {
+	t.Helper()
+
+	records, err := decodeRecords(openFile(t, path))
+	if err != nil {
+		t.Fatalf("decode event stream: %v", err)
+	}
 	return records
+}
+
+func readFile(t *testing.T, path string) []byte {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return data
+}
+
+func digestOf(data []byte) string {
+	return fmt.Sprintf("%x", sha256.Sum256(data))
+}
+
+func validRecordForTest() eventstream.Record {
+	return eventstream.Record{
+		SchemaVersion: eventstream.CurrentSchemaVersion,
+		ID:            "workflow-1-record-1",
+		WorkflowID:    "workflow-1",
+		Sequence:      1,
+		OccurredAt:    time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC),
+		Kind:          eventstream.KindEvent,
+		Event:         &eventstream.Event{Name: "handoff.started", Message: "Handoff started.", HandoffID: "workflow-1-1"},
+	}
 }
 
 func openFile(t *testing.T, path string) *os.File {
@@ -286,6 +408,7 @@ type fakeRunner struct {
 	requests       []handoff.Request
 	statuses       []handoff.Status
 	failure        error
+	artifacts      []handoff.Reference
 	overrideResult func(*handoff.Result)
 }
 
@@ -305,6 +428,7 @@ func (runner *fakeRunner) Execute(ctx context.Context, request handoff.Request) 
 		Role:          request.To,
 		Status:        status,
 		Summary:       "Proposal completed for " + string(request.To) + ".",
+		Artifacts:     runner.artifacts,
 	}
 	if runner.overrideResult != nil {
 		runner.overrideResult(&result)

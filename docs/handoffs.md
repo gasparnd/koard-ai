@@ -101,4 +101,6 @@ The proposal-only OpenCode adapter implements this protocol without changing its
 
 The agent router composes this protocol into a fixed route: the planner hands off to the executor, then the executor hands off to the verifier. Each hop is an independent request/result pair with its own identity, so a result can only answer the handoff it was created for.
 
+The second request carries what it must verify: a `Context` reference with kind `koard.handoff.result`, a state-relative URI, and a `sha256:` digest of the persisted result bytes, followed by any artifact the responder declared. The verifier therefore inspects the exact proposal instead of a paraphrase of it.
+
 The adapter does not authorize the next transition returned by a model. Agent routing records the route, and later workflow phases decide transitions.
