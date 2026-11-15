@@ -6,7 +6,7 @@ The project is inspired by the orchestration principles behind Gentle AI, but it
 
 ## Current status
 
-Koard is in its bootstrap phase. The current CLI can initialize and diagnose the project-level configuration. Model adapters, Engram integration, ODD execution, and skill generation are planned but are not implemented yet.
+Koard is in its bootstrap phase. The current CLI can initialize a project and strictly validate its versioned configuration. Model adapters, Engram integration, ODD execution, and skill generation are planned but are not implemented yet.
 
 ## Quick start
 
@@ -17,6 +17,8 @@ go test ./...
 go run ./cmd/koard init
 go run ./cmd/koard doctor
 ```
+
+`doctor` rejects unsupported schema versions, unknown fields, missing required values, and multiple YAML documents. See [docs/configuration.md](docs/configuration.md) for the current schema.
 
 ## Documentation
 

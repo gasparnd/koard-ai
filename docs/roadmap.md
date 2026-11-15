@@ -9,11 +9,11 @@ Koard grows through executable vertical slices. Planned functionality is documen
 - [x] `koard doctor` configuration presence check.
 - [x] Human and agent documentation entry points.
 - [x] Initial self-hosting configuration.
-- [ ] Run the Go test suite in an environment with Go 1.23 or newer.
+- [x] Run the Go test suite and vet checks with Go 1.27.4.
 
 ## Foundation
 
-- [ ] Versioned configuration parser and validator.
+- [x] Versioned configuration parser and validator for schema version 1.
 - [ ] Provider-independent agent and handoff contracts.
 - [ ] ODD workflow state machine.
 - [ ] Structured event and diagnostic output.

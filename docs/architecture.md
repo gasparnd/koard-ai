@@ -50,4 +50,4 @@ docs/             Human and agent documentation
 
 ## Configuration boundary
 
-`.koard/koard.yaml` selects roles, workflows, memory, and adapters. Secrets must never be stored there. Authentication remains the responsibility of each provider's established credential mechanism.
+`.koard/koard.yaml` selects roles, workflows, memory, and adapters. The parser accepts only the explicitly versioned schema documented in `configuration.md`; provider-specific settings must enter through future adapter contracts rather than leak into the core schema. Secrets must never be stored there. Authentication remains the responsibility of each provider's established credential mechanism.

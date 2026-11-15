@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/koard-ai/koard/internal/config"
 )
 
 const Version = "0.1.0-dev"
@@ -60,11 +62,12 @@ func Run(args []string, cwd string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "Koard project initialized.")
 		return 0
 	case "doctor":
-		if err := diagnoseProject(cwd); err != nil {
+		projectConfig, err := diagnoseProject(cwd)
+		if err != nil {
 			fmt.Fprintf(stderr, "koard doctor: %v\n", err)
 			return 1
 		}
-		fmt.Fprintln(stdout, "Koard project configuration is present.")
+		fmt.Fprintf(stdout, "Koard project configuration is valid (schema version %d).\n", projectConfig.SchemaVersion)
 		return 0
 	default:
 		fmt.Fprintf(stderr, "koard: unknown command %q\n", args[0])
@@ -94,20 +97,25 @@ func initializeProject(cwd string) error {
 	return nil
 }
 
-func diagnoseProject(cwd string) error {
+func diagnoseProject(cwd string) (config.Config, error) {
 	configPath := filepath.Join(cwd, ".koard", "koard.yaml")
 	info, err := os.Stat(configPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return errors.New("configuration not found; run 'koard init'")
+			return config.Config{}, errors.New("configuration not found; run 'koard init'")
 		}
-		return fmt.Errorf("inspect configuration: %w", err)
+		return config.Config{}, fmt.Errorf("inspect configuration: %w", err)
 	}
 	if info.IsDir() {
-		return errors.New(".koard/koard.yaml is a directory, expected a file")
+		return config.Config{}, errors.New(".koard/koard.yaml is a directory, expected a file")
 	}
 
-	return nil
+	projectConfig, err := config.Load(configPath)
+	if err != nil {
+		return config.Config{}, fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	return projectConfig, nil
 }
 
 func printHelp(output io.Writer) {
