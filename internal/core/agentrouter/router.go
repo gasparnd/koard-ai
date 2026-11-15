@@ -372,7 +372,7 @@ func validateOptions(options Options) (Options, error) {
 	if strings.TrimSpace(options.WorkflowID) == "" {
 		return Options{}, errors.New("workflow_id is required")
 	}
-	if err := validateWorkflowID(options.WorkflowID); err != nil {
+	if err := ValidateWorkflowID(options.WorkflowID); err != nil {
 		return Options{}, err
 	}
 	if strings.TrimSpace(options.TaskID) == "" {
@@ -409,7 +409,10 @@ func validateOptions(options Options) (Options, error) {
 	return options, nil
 }
 
-func validateWorkflowID(id string) error {
+// ValidateWorkflowID requires an identity that can safely name one run
+// directory. Other core packages reuse this guard when resolving persisted
+// workflows by identity.
+func ValidateWorkflowID(id string) error {
 	if id == "." || id == ".." || filepath.Base(id) != id || strings.ContainsAny(id, `/\`) {
 		return fmt.Errorf("workflow_id %q must be a single path segment", id)
 	}
