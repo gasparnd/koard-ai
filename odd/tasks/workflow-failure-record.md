@@ -14,7 +14,7 @@ Objective: a claimed workflow always leaves a readable terminal record, so a run
 
 ## Tasks
 
-- [ ] T1 — S1-S5, S7 — route: inline (no writer trigger; one coherent behavior) — risk: pending — commit: pending.
+- [x] T1 — S1-S5, S7 — route: inline (no writer trigger; one coherent behavior) — risk: none — commit: `7c65e4f`.
 
 ## Log
 
@@ -22,3 +22,8 @@ Objective: a claimed workflow always leaves a readable terminal record, so a run
 - L2 (2026-11-15): Inspection of `internal/core/agentrouter/router.go` found two persist points (`:148` and `:165`) and six error returns that abandon the claimed directory (`:113`, `:118`, `:121`, `:127`, `:130`, `:135`, `:138`, `:153`). The claimed identity is then poisoned: a retry dies at "already exists" with no evidence of why.
 - L3 (2026-11-15): `TestRouteRejectsUnboundResult:198` pinned the defect itself, asserting that no `workflow.json` exists after a binding failure. Its intent ("must not persist a completed outcome") is right; the assertion was too blunt. It is rewritten to require a `failed` record with no results.
 - L4 (2026-11-15): `eventstream.Record.Validate` refuses a record carrying both `Event` and `Diagnostic` payloads, and `Diagnostic` has no `handoff_id` field. The failing handoff is therefore named in the diagnostic detail instead of extending the event schema.
+- L5 (2026-11-15): RED observed on five assertions before implementing: returned status was `""` instead of `failed`, no `workflow.json` existed after a binding failure, the last event-stream record was an event rather than a diagnostic, and the completed step was absent from the outcome. `TestRouteKeepsOneDiagnosticForAnUnboundResult` passed before the change, so it pins existing behavior instead of the new one.
+- L6 (2026-11-15): GREEN by moving the run into a `routing` value with one `settle` persist point. That removed the two old persist sites and the six returns that abandoned state; no error is swallowed, and a failure to write the record joins with the failure that stopped the run.
+- L7 (2026-11-15): Verification: `go test ./internal/core/agentrouter -count=1`, `go test ./... -count=1`, `go vet ./...`, and `gofmt -l internal cmd` all clean. The twelve pre-existing router tests are unchanged and pass, which is the differential evidence that the success and blocked paths behave as before.
+- L8 (2026-11-15): RDD assess over `8a6280b..HEAD`: `risk: medium`, `review_due: false`, `review_due_reason: under_budget`. No native review started.
+- L9 (2026-11-15): One observable did change outside the request: the `KOARD_HANDOFF_INVALID` diagnostic detail now includes the failing handoff identity, because the detail carries the wrapped error. `docs/events.md` was updated for that and for the new code.
