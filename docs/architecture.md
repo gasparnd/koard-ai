@@ -48,8 +48,21 @@ The state machine does not execute models, write event logs, or authorize delive
 
 The contract does not choose storage, generate identities, or infer event meaning from text. The future orchestrator will create records from accepted state transitions and validated handoff outcomes. See `events.md` for the wire format.
 
-## Runtime adapters
+## Agent routing
 
+`internal/core/agentrouter` owns the first fixed orchestration route. Version 1 composes exactly two provider-neutral handoffs, planner → executor and executor → verifier, and stops as soon as a result is not `completed`.
+
+The router validates options and every request before execution, binds each result to its request identity and destination role, and persists one workflow directory under `.koard/state/runs/<workflow_id>/`:
+
+- `workflow.json`, the versioned outcome with every handoff and result;
+- `handoffs/<step>-request.json` and `handoffs/<step>-result.json`;
+- `events.jsonl`, the structured event stream with monotonic sequence.
+
+State files are written atomically, and a workflow identity is claimed with an atomic directory creation so a concurrent or replayed run fails instead of interleaving files. The router never mutates the workspace, never performs delivery operations, and never authorizes a model-returned `next` transition.
+
+Provider execution enters through one injected runner interface. The OpenCode adapter satisfies it structurally, so the core keeps its inward-only dependency direction. Routing policies beyond the fixed route, ODD state-machine integration, candidate identity, retries, and CLI wiring remain later work.
+
+## Runtime adapters
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role.
 
 This adapter is proposal-only. It requires OpenCode 2.2.3 or newer, disables snapshots, denies every tool by default, permits only repository `read`, `glob`, and `grep`, and disables MCP servers, skills, plugins, and web search for the run. It never enables auto-approval, worktrees, or session continuation. The adapter does not route roles, persist workflow state, create candidate identities, mutate the workspace, or authorize delivery.
@@ -61,7 +74,7 @@ The capability guard travels as inline OpenCode configuration. OpenCode evaluate
 ```text
 cmd/koard/        CLI executable
 internal/cli/     Command routing and user-facing behavior
-internal/core/    Future provider-independent contracts
+internal/core/    Provider-independent contracts and orchestration
 internal/adapters Runtime and service integrations
 .koard/           Project-level Koard configuration
 skills/           Project skills and local references

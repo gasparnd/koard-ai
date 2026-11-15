@@ -6,8 +6,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/koard-ai/koard/internal/core/agentrouter"
 	"github.com/koard-ai/koard/internal/core/handoff"
 )
+
+// The router depends on this structural contract; pin it here so a signature
+// change in either package fails the build instead of the first routed run.
+var _ agentrouter.Runner = (*Adapter)(nil)
 
 func TestAdapterProposeReturnsBoundResult(t *testing.T) {
 	t.Parallel()

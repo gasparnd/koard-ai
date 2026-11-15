@@ -90,6 +90,13 @@ func newAdapter(config Config, runner commandRunner) (*Adapter, error) {
 	}, nil
 }
 
+// Execute runs one handoff through the proposal-only path. It exists so the
+// adapter satisfies the router's runner contract without the core importing a
+// provider package.
+func (adapter *Adapter) Execute(ctx context.Context, request handoff.Request) (handoff.Result, error) {
+	return adapter.Propose(ctx, request)
+}
+
 // Propose performs a read-only OpenCode run and returns exactly one result
 // bound to the supplied request. It never enables OpenCode auto-approval,
 // worktrees, or session continuation.
