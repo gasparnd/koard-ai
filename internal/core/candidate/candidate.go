@@ -31,6 +31,9 @@ type Candidate struct {
 	ID            string `json:"id"`
 	TaskID        string `json:"task_id"`
 	HandoffID     string `json:"handoff_id"`
+	// SnapshotID is the identity of the captured bytes behind the proposal.
+	// It is recorded beside the identity and never part of its digest.
+	SnapshotID string `json:"snapshot_id,omitempty"`
 }
 
 // Produce derives a candidate from the exact result a responder returned. It
