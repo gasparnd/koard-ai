@@ -85,7 +85,7 @@ A request requires unique handoff and task identities, distinct valid source and
 
 Result status is one of `completed`, `blocked`, or `failed`. The result must reference the exact request ID and must come from the request's destination role. Artifacts and evidence use explicit references so future immutable candidate and RDD contracts can bind their digests.
 
-A completed executor result is what `internal/core/candidate` turns into a candidate: the identity is the SHA-256 digest of the result summary plus its artifacts and evidence, so the references declared here are the content the identity binds.
+A completed executor result is what `internal/core/candidate` turns into a candidate: the identity is the SHA-256 digest of the result summary plus its artifacts and evidence, so the references declared here are the content the identity binds. The router then captures each executor artifact as a candidate snapshot, which accepts only `repo://` paths relative to the workspace; any other artifact, or a declared `digest` that does not match the file's bytes, refuses the candidate. See `architecture.md`.
 
 ## Validation guarantees
 

@@ -70,9 +70,17 @@ Two consequences are deliberate. Identical content always produces the same iden
 
 The package depends only on `internal/core/handoff` and rejects any result that is not `completed` and bound to its request. Artifact order is preserved because it is part of the proposal, not a set.
 
-The identity binds what the protocol actually carries: declared references and the summary, not the bytes those references point at. Immutable snapshot capture, applying a candidate, RDD, and stale-candidate rejection remain later work.
+The identity binds what the protocol actually carries: declared references and the summary, not the bytes those references point at. The candidate snapshot binds the bytes.
 
-The router records the candidate in `workflow.json` as soon as the executor hop completes, and a blocked or failed executor produces no candidate at all.
+The router records the candidate in `workflow.json` as soon as the executor hop completes and its snapshot is captured, and a blocked or failed executor produces no candidate at all.
+
+## Candidate snapshot
+
+`internal/core/snapshot` captures the exact bytes a candidate proposes. When the executor completes, the router reads every artifact from the workspace and stores it as a read-only, content-addressed blob under `<run>/snapshot/blobs/sha256/`, then writes `<run>/snapshot/manifest.json`. The manifest lists the candidate identity and, in artifact order, each artifact's kind, URI, `sha256:` digest of the captured bytes, and size. The snapshot identity is the SHA-256 digest of the manifest and is recorded as `snapshot_id` beside the candidate identity, which the snapshot does not change.
+
+Only `repo://` artifacts can be captured. The path must be canonical and relative, must stay inside the workspace after resolving symlinks, and must name a regular file; the file opened must be the file validated. A declared digest must match the captured bytes. A single artifact may hold at most 8 MiB and a snapshot at most 32 MiB in total, which bounds the memory a capture uses. Capture observes cancellation before reading each artifact and before publishing each blob; a run cancelled during capture records `KOARD_WORKFLOW_CANCELLED` instead of a refusal. Every artifact is checked before anything is written, so any refusal fails the run with a `KOARD_SNAPSHOT_REFUSED` diagnostic, records no candidate, and leaves no manifest. Blobs and the manifest are published atomically and never overwritten.
+
+`snapshot.Load` verifies a stored snapshot against the identity a candidate recorded: the manifest must hash to it and every blob must still match its digest. Evidence stays declared, and the verifier does not yet receive the snapshot. Consent binding, stale-candidate rejection, and applying a candidate remain later work.
 
 ## Mutation boundary
 

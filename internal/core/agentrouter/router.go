@@ -17,6 +17,7 @@ import (
 	"github.com/koard-ai/koard/internal/core/eventstream"
 	"github.com/koard-ai/koard/internal/core/handoff"
 	"github.com/koard-ai/koard/internal/core/mutation"
+	"github.com/koard-ai/koard/internal/core/snapshot"
 )
 
 const CurrentSchemaVersion = 1
@@ -34,6 +35,9 @@ const (
 	// cancelledWorkflowCode marks a run the caller stopped on purpose. It is a
 	// warning: nothing in the workflow malfunctioned.
 	cancelledWorkflowCode = "KOARD_WORKFLOW_CANCELLED"
+	// snapshotRefusedCode marks a candidate whose artifacts could not be
+	// captured as an immutable snapshot.
+	snapshotRefusedCode = "KOARD_SNAPSHOT_REFUSED"
 )
 
 // cancelled reports that the caller's context stopped the run while handoffID
@@ -72,8 +76,11 @@ type Options struct {
 	TaskID     string
 	Objective  string
 	StateDir   string
-	Runner     Runner
-	Clock      func() time.Time
+	// Workspace is the repository the responders inspect. The candidate
+	// snapshot reads its repo:// artifacts from here and never writes to it.
+	Workspace string
+	Runner    Runner
+	Clock     func() time.Time
 	// Capabilities requested for the routed handoffs. Empty means the
 	// read-only set. Any value outside that set stops the run.
 	Capabilities []string
@@ -231,6 +238,22 @@ func (route *routing) run(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("produce candidate for handoff %q: %w", request.ID, err)
 			}
+			// A candidate exists only with the bytes it proposes, so a refused
+			// snapshot stops the run before the candidate is recorded.
+			captured, err := snapshot.Capture(ctx, route.options.Workspace, filepath.Join(route.dir, "snapshot"), produced.ID, result.Artifacts)
+			if err != nil {
+				// A capture the caller stopped is a cancellation, not a refusal.
+				if ctxErr := ctx.Err(); ctxErr != nil && errors.Is(err, ctxErr) {
+					return &cancelled{handoffID: request.ID, cause: ctxErr}
+				}
+				refused := fmt.Errorf("snapshot candidate for handoff %q: %w", request.ID, err)
+				route.diagnosed = true
+				if diagnoseErr := route.diagnose(snapshotRefusedCode, "Candidate snapshot was refused.", refused.Error()); diagnoseErr != nil {
+					return errors.Join(refused, diagnoseErr)
+				}
+				return refused
+			}
+			produced.SnapshotID = captured.ID
 			route.outcome.Candidate = &produced
 		}
 		// The next handoff must verify the artifact this one produced, so the
@@ -351,6 +374,14 @@ func validateOptions(options Options) (Options, error) {
 	}
 	if strings.TrimSpace(options.StateDir) == "" {
 		return Options{}, errors.New("state directory is required")
+	}
+	if strings.TrimSpace(options.Workspace) == "" {
+		return Options{}, errors.New("workspace is required")
+	}
+	if info, err := os.Stat(options.Workspace); err != nil {
+		return Options{}, fmt.Errorf("inspect workspace: %w", err)
+	} else if !info.IsDir() {
+		return Options{}, fmt.Errorf("workspace %q is not a directory", options.Workspace)
 	}
 	if options.Runner == nil {
 		return Options{}, errors.New("runner is required")
