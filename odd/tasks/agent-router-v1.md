@@ -16,7 +16,7 @@ Objective: route one workflow through the fixed planner → executor → verifie
 ## Tasks
 
 - [x] T1 — S1-S8 — route: inline (no writer trigger; one coherent behavior) — risk: item 6 (routing logic must be pinned by tests) — evidence: `go test ./internal/core/agentrouter`, `go test ./...`, `go vet ./...` all pass; commit: `f203f63`.
-- [x] T2 — S4 — route: inline — risk: none (new behavior pinned by new tests before implementation) — evidence: `go test ./internal/core/agentrouter`, `go test ./...`, `go vet ./...` all pass; commit: pending.
+- [x] T2 — S4 — route: inline — risk: none (new behavior pinned by new tests before implementation) — evidence: `go test ./internal/core/agentrouter`, `go test ./...`, `go vet ./...` all pass; commit: `7a1ba47`.
 
 ## Log
 
