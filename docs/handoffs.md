@@ -85,6 +85,8 @@ A request requires unique handoff and task identities, distinct valid source and
 
 Result status is one of `completed`, `blocked`, or `failed`. The result must reference the exact request ID and must come from the request's destination role. Artifacts and evidence use explicit references so future immutable candidate and RDD contracts can bind their digests.
 
+A completed executor result is what `internal/core/candidate` turns into a candidate: the identity is the SHA-256 digest of the result summary plus its artifacts and evidence, so the references declared here are the content the identity binds.
+
 ## Validation guarantees
 
 The implementation in `internal/core/handoff`:

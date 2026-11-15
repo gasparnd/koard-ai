@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/koard-ai/koard/internal/core/candidate"
 	"github.com/koard-ai/koard/internal/core/eventstream"
 	"github.com/koard-ai/koard/internal/core/handoff"
 )
@@ -52,12 +53,13 @@ type Options struct {
 
 // Outcome is the persisted record of one routed workflow.
 type Outcome struct {
-	SchemaVersion int               `json:"schema_version"`
-	WorkflowID    string            `json:"workflow_id"`
-	TaskID        string            `json:"task_id"`
-	Status        handoff.Status    `json:"status"`
-	Handoffs      []handoff.Request `json:"handoffs"`
-	Results       []handoff.Result  `json:"results"`
+	SchemaVersion int                  `json:"schema_version"`
+	WorkflowID    string               `json:"workflow_id"`
+	TaskID        string               `json:"task_id"`
+	Status        handoff.Status       `json:"status"`
+	Candidate     *candidate.Candidate `json:"candidate,omitempty"`
+	Handoffs      []handoff.Request    `json:"handoffs"`
+	Results       []handoff.Result     `json:"results"`
 }
 
 // Route executes the fixed route and persists every handoff and event. It
@@ -140,6 +142,15 @@ func Route(ctx context.Context, options Options) (Outcome, error) {
 
 		if result.Status != handoff.StatusCompleted {
 			return persistOutcome(workflowDir, outcome)
+		}
+		// The executor is the role that proposes, so its completed result is
+		// the candidate this workflow hands to review.
+		if step.To == handoff.RoleExecutor {
+			produced, err := candidate.Produce(request, result)
+			if err != nil {
+				return Outcome{}, fmt.Errorf("produce candidate for handoff %q: %w", request.ID, err)
+			}
+			outcome.Candidate = &produced
 		}
 		// The next handoff must verify the artifact this one produced, so the
 		// persisted result travels as a digest-bound context reference.

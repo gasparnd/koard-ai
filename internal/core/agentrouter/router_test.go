@@ -279,6 +279,61 @@ func TestRouteContextDigestIsUniquePerHandoff(t *testing.T) {
 	}
 }
 
+func TestRouteProducesDeterministicCandidate(t *testing.T) {
+	t.Parallel()
+
+	firstOptions := testOptions(t, &fakeRunner{})
+	first, err := Route(context.Background(), firstOptions)
+	if err != nil {
+		t.Fatalf("route workflow: %v", err)
+	}
+	if first.Candidate == nil {
+		t.Fatal("a completed executor handoff must produce a candidate")
+	}
+	if !strings.HasPrefix(first.Candidate.ID, "sha256:") {
+		t.Fatalf("unexpected candidate identity %q", first.Candidate.ID)
+	}
+	if first.Candidate.HandoffID != first.Handoffs[0].ID || first.Candidate.TaskID != firstOptions.TaskID {
+		t.Fatalf("candidate provenance is not the executor handoff: %#v", first.Candidate)
+	}
+
+	secondOptions := testOptions(t, &fakeRunner{})
+	secondOptions.WorkflowID = "workflow-2"
+	second, err := Route(context.Background(), secondOptions)
+	if err != nil {
+		t.Fatalf("route second workflow: %v", err)
+	}
+	if second.Candidate == nil || second.Candidate.ID != first.Candidate.ID {
+		t.Fatalf("identical proposals produced different identities: %#v and %#v", first.Candidate, second.Candidate)
+	}
+	if second.Candidate.HandoffID == first.Candidate.HandoffID {
+		t.Fatal("provenance must differ between workflows")
+	}
+
+	persisted := readOutcome(t, filepath.Join(secondOptions.StateDir, secondOptions.WorkflowID, "workflow.json"))
+	if persisted.Candidate == nil || persisted.Candidate.ID != second.Candidate.ID {
+		t.Fatalf("candidate identity was not persisted: %#v", persisted.Candidate)
+	}
+}
+
+func TestRouteOmitsCandidateWhenExecutorDoesNotComplete(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{statuses: []handoff.Status{handoff.StatusBlocked}}
+	options := testOptions(t, runner)
+	outcome, err := Route(context.Background(), options)
+	if err != nil {
+		t.Fatalf("route blocked workflow: %v", err)
+	}
+	if outcome.Candidate != nil {
+		t.Fatalf("a blocked executor must not produce a candidate: %#v", outcome.Candidate)
+	}
+	persisted := readOutcome(t, filepath.Join(options.StateDir, options.WorkflowID, "workflow.json"))
+	if persisted.Candidate != nil {
+		t.Fatalf("a blocked workflow persisted a candidate: %#v", persisted.Candidate)
+	}
+}
+
 func TestDecodeRecordsRejectsCorruptStream(t *testing.T) {
 	t.Parallel()
 

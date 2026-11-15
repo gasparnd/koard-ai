@@ -54,18 +54,30 @@ The contract does not choose storage, generate identities, or infer event meanin
 
 The router validates options and every request before execution, binds each result to its request identity and destination role, and persists one workflow directory under `.koard/state/runs/<workflow_id>/`:
 
-- `workflow.json`, the versioned outcome with every handoff and result;
+- `workflow.json`, the versioned outcome with every handoff and result, plus the candidate identity once the executor completes;
 - `handoffs/<step>-request.json` and `handoffs/<step>-result.json`;
 - `events.jsonl`, the structured event stream with monotonic sequence.
 
 State files are written atomically, and a workflow identity is claimed with an atomic directory creation so a concurrent or replayed run fails instead of interleaving files. Each hop after the first carries the previous result as a digest-bound `Context` reference, so the next role inspects the exact persisted bytes instead of a paraphrase. The router never mutates the workspace, never performs delivery operations, and never authorizes a model-returned `next` transition.
 
-Provider execution enters through one injected runner interface. The OpenCode adapter satisfies it structurally, so the core keeps its inward-only dependency direction. Routing policies beyond the fixed route, ODD state-machine integration, candidate identity, retries, and CLI wiring remain later work.
+Provider execution enters through one injected runner interface. The OpenCode adapter satisfies it structurally, so the core keeps its inward-only dependency direction. Routing policies beyond the fixed route, ODD state-machine integration, retries, and CLI wiring remain later work.
+
+## Candidate identity
+
+`internal/core/candidate` turns one completed executor result into a candidate with a content-derived identity. The identity is the SHA-256 digest of a canonical proposal: the result summary, its artifacts, and its evidence.
+
+Two consequences are deliberate. Identical content always produces the same identity, even across separate workflows. Provenance is recorded beside the identity and never hashed, so a candidate carries the task identity and the handoff that produced it without the identity depending on them.
+
+The package depends only on `internal/core/handoff` and rejects any result that is not `completed` and bound to its request. Artifact order is preserved because it is part of the proposal, not a set.
+
+The identity binds what the protocol actually carries: declared references and the summary, not the bytes those references point at. Immutable snapshot capture, applying a candidate, RDD, and stale-candidate rejection remain later work.
+
+The router records the candidate in `workflow.json` as soon as the executor hop completes, and a blocked or failed executor produces no candidate at all.
 
 ## Runtime adapters
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role.
 
-This adapter is proposal-only. It requires OpenCode 2.2.3 or newer, disables snapshots, denies every tool by default, permits only repository `read`, `glob`, and `grep`, and disables MCP servers, skills, plugins, and web search for the run. It never enables auto-approval, worktrees, or session continuation. The adapter does not route roles, persist workflow state, create candidate identities, mutate the workspace, or authorize delivery.
+This adapter is proposal-only. It requires OpenCode 2.2.3 or newer, disables snapshots, denies every tool by default, permits only repository `read`, `glob`, and `grep`, and disables MCP servers, skills, plugins, and web search for the run. It never enables auto-approval, worktrees, or session continuation. The adapter does not route roles, persist workflow state, produce candidate identities, mutate the workspace, or authorize delivery.
 
 The capability guard travels as inline OpenCode configuration. OpenCode evaluates managed and Console policy after that inline configuration, so an administrator or connected workspace allow can widen the guard. Because the adapter never passes auto-approval, any permission that survives the guard still fails instead of being granted in the non-interactive run.
 
