@@ -35,7 +35,7 @@ Replay, idempotency, and recovery after the Koard process dies move to controlle
 
 ### 2. Receipt-driven development
 
-- [ ] User-owned `enable`, `disable`, and `status` review mode.
+- [x] User-owned `enable`, `disable`, and `status` review mode.
 - [ ] Immutable candidate snapshot and identity binding.
 - [ ] Candidate risk assessment with passive, medium, and high tiers.
 - [ ] Explicit consent bound to the exact candidate snapshot.

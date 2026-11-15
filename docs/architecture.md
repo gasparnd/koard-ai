@@ -60,7 +60,7 @@ The router validates options and every request before execution, binds each resu
 
 State files are written atomically, and a workflow identity is claimed with an atomic directory creation so a concurrent or replayed run fails instead of interleaving files. A claimed identity always leaves a readable record: every step writes through one object with a single persist point, so a run that stops still persists `workflow.json` with status `failed`, keeping the steps that did complete. The failure is also recorded as a diagnostic in `events.jsonl`, naming the handoff that was executing and the cause. Each hop after the first carries the previous result as a digest-bound `Context` reference, so the next role inspects the exact persisted bytes instead of a paraphrase. The router never mutates the workspace, never performs delivery operations, and never authorizes a model-returned `next` transition.
 
-Provider execution enters through one injected runner interface. The OpenCode adapter satisfies it structurally, so the core keeps its inward-only dependency direction. Routing policies beyond the fixed route, ODD state-machine integration, retries, resuming an incomplete workflow, cancellation, and CLI wiring remain later work.
+Provider execution enters through one injected runner interface. The OpenCode adapter satisfies it structurally, so the core keeps its inward-only dependency direction. A run cancelled through its context before it starts claims no identity; one cancelled after it starts stops before the next handoff and records a `KOARD_WORKFLOW_CANCELLED` warning instead of a failure. Routing policies beyond the fixed route, ODD state-machine integration, retries, resuming an incomplete workflow, and CLI wiring remain later work.
 
 ## Candidate identity
 
@@ -81,6 +81,10 @@ The router records the candidate in `workflow.json` as soon as the executor hop 
 The router checks the requested capabilities before it creates any state, so a refused run leaves nothing behind. The OpenCode adapter checks the same set before spawning a process, which makes one list the single source of truth for both callers instead of two comparisons that can drift.
 
 The boundary covers what no code path performs yet. Nothing in Koard commits, pushes, opens a pull request, merges, or releases, and applying a candidate does not exist, so those capabilities are refused explicitly rather than left advertised and unimplemented.
+
+## Review mode
+
+`internal/core/reviewmode` owns the user's switch for receipt-driven development. Two setting files decide it: a global one in the user's configuration directory and a clone-local one in `.koard/state/`, which git ignores. Off wins over on, and with nothing set the mode is on. The committed `koard.yaml` cannot carry the mode, so a repository change can never flip it. A setting file that cannot be trusted is an error, never a silent "on". Nothing consumes the mode yet; it exists so the switch is in the user's hands before any review does. See `review-mode.md`.
 
 ## Runtime adapters
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role.
