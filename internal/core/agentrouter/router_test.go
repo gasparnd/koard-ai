@@ -18,6 +18,7 @@ import (
 	"github.com/koard-ai/koard/internal/core/eventstream"
 	"github.com/koard-ai/koard/internal/core/handoff"
 	"github.com/koard-ai/koard/internal/core/mutation"
+	"github.com/koard-ai/koard/internal/core/risk"
 	"github.com/koard-ai/koard/internal/core/snapshot"
 )
 
@@ -613,6 +614,50 @@ func TestRouteSnapshotsTheCandidateArtifacts(t *testing.T) {
 	}
 	if len(loaded.Manifest.Entries) != 1 || loaded.Manifest.Entries[0].URI != "repo://internal/change.go" {
 		t.Fatalf("unexpected snapshot entries: %#v", loaded.Manifest.Entries)
+	}
+}
+
+func TestRouteRecordsRiskAssessmentBesideCandidate(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{artifacts: []handoff.Reference{{Kind: "source", URI: "repo://internal/auth.go"}}}
+	options := testOptions(t, runner)
+	if err := os.MkdirAll(filepath.Join(options.Workspace, "internal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(options.Workspace, "internal", "auth.go"), []byte("package internal\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := Route(context.Background(), options)
+	if err != nil {
+		t.Fatalf("route workflow: %v", err)
+	}
+	if outcome.Risk == nil || outcome.Risk.Tier != risk.High || !outcome.Risk.ReviewDue {
+		t.Fatalf("expected a high assessment, got %#v", outcome.Risk)
+	}
+	if outcome.Risk.SnapshotID != outcome.Candidate.SnapshotID {
+		t.Fatalf("the assessment is bound to %q, not the candidate snapshot %q", outcome.Risk.SnapshotID, outcome.Candidate.SnapshotID)
+	}
+
+	persisted := readOutcome(t, filepath.Join(options.StateDir, options.WorkflowID, "workflow.json"))
+	if persisted.Risk == nil || persisted.Risk.Tier != risk.High || len(persisted.Risk.Reasons) != 1 || persisted.Risk.Reasons[0].Code != "hot_path" {
+		t.Fatalf("the assessment was not persisted: %#v", persisted.Risk)
+	}
+}
+
+func TestRouteRecordsNoRiskWithoutCandidate(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{statuses: []handoff.Status{handoff.StatusBlocked}}
+	options := testOptions(t, runner)
+	outcome, err := Route(context.Background(), options)
+	if err != nil {
+		t.Fatalf("route blocked workflow: %v", err)
+	}
+	persisted := readOutcome(t, filepath.Join(options.StateDir, options.WorkflowID, "workflow.json"))
+	if outcome.Risk != nil || persisted.Risk != nil {
+		t.Fatalf("a workflow without a candidate recorded a risk assessment: %#v", persisted.Risk)
 	}
 }
 

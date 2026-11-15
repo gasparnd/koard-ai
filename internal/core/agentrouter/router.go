@@ -17,6 +17,7 @@ import (
 	"github.com/koard-ai/koard/internal/core/eventstream"
 	"github.com/koard-ai/koard/internal/core/handoff"
 	"github.com/koard-ai/koard/internal/core/mutation"
+	"github.com/koard-ai/koard/internal/core/risk"
 	"github.com/koard-ai/koard/internal/core/snapshot"
 )
 
@@ -93,8 +94,11 @@ type Outcome struct {
 	TaskID        string               `json:"task_id"`
 	Status        handoff.Status       `json:"status"`
 	Candidate     *candidate.Candidate `json:"candidate,omitempty"`
-	Handoffs      []handoff.Request    `json:"handoffs"`
-	Results       []handoff.Result     `json:"results"`
+	// Risk is the tier of the candidate snapshot, present only with a
+	// candidate.
+	Risk     *risk.Assessment  `json:"risk,omitempty"`
+	Handoffs []handoff.Request `json:"handoffs"`
+	Results  []handoff.Result  `json:"results"`
 }
 
 // routing carries the state of one claimed workflow. Every step writes through
@@ -254,7 +258,12 @@ func (route *routing) run(ctx context.Context) error {
 				return refused
 			}
 			produced.SnapshotID = captured.ID
+			assessment, err := risk.Assess(filepath.Join(route.dir, "snapshot"), captured.ID, nil)
+			if err != nil {
+				return fmt.Errorf("assess candidate for handoff %q: %w", request.ID, err)
+			}
 			route.outcome.Candidate = &produced
+			route.outcome.Risk = &assessment
 		}
 		// The next handoff must verify the artifact this one produced, so the
 		// persisted result travels as a digest-bound context reference.

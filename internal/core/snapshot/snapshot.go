@@ -153,18 +153,27 @@ func Load(dir, id string) (Snapshot, error) {
 		return Snapshot{}, fmt.Errorf("snapshot manifest schema_version %d is not supported", manifest.SchemaVersion)
 	}
 	for _, entry := range manifest.Entries {
-		if !digestPattern.MatchString(entry.Digest) {
-			return Snapshot{}, fmt.Errorf("snapshot entry %q has malformed digest %q", entry.URI, entry.Digest)
-		}
-		content, err := os.ReadFile(blobPath(dir, entry.Digest))
-		if err != nil {
-			return Snapshot{}, fmt.Errorf("snapshot entry %q: %w", entry.URI, err)
-		}
-		if digestOf(content) != entry.Digest || int64(len(content)) != entry.Size {
-			return Snapshot{}, fmt.Errorf("snapshot entry %q no longer matches its digest", entry.URI)
+		if _, err := ReadEntry(dir, entry); err != nil {
+			return Snapshot{}, err
 		}
 	}
 	return Snapshot{ID: id, Manifest: manifest}, nil
+}
+
+// ReadEntry returns the stored bytes of one entry after checking that they
+// still match its digest and size.
+func ReadEntry(dir string, entry Entry) ([]byte, error) {
+	if !digestPattern.MatchString(entry.Digest) {
+		return nil, fmt.Errorf("snapshot entry %q has malformed digest %q", entry.URI, entry.Digest)
+	}
+	content, err := os.ReadFile(blobPath(dir, entry.Digest))
+	if err != nil {
+		return nil, fmt.Errorf("snapshot entry %q: %w", entry.URI, err)
+	}
+	if digestOf(content) != entry.Digest || int64(len(content)) != entry.Size {
+		return nil, fmt.Errorf("snapshot entry %q no longer matches its digest", entry.URI)
+	}
+	return content, nil
 }
 
 func realWorkspace(workspace string) (string, error) {

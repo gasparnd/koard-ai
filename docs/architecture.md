@@ -82,6 +82,23 @@ Only `repo://` artifacts can be captured. The path must be canonical and relativ
 
 `snapshot.Load` verifies a stored snapshot against the identity a candidate recorded: the manifest must hash to it and every blob must still match its digest. Evidence stays declared, and the verifier does not yet receive the snapshot. Consent binding, stale-candidate rejection, and applying a candidate remain later work.
 
+## Risk assessment
+
+`internal/core/risk` classifies a verified candidate snapshot into a `passive`, `medium`, or `high` tier using Koard's rules below. Every list is closed in the package so a candidate can never lower its own tier through repository configuration.
+
+| Tier | Reason code | Signal |
+|---|---|---|
+| `passive` | `non_executable_only` | Every artifact is documentation (`.md`, `.rst`), or there are no artifacts |
+| `medium` | `configuration_change` | `go.mod`, `go.sum`, `Dockerfile`, `Makefile`, `.json`, `.yaml`, `.yml`, `.toml` |
+| `medium` | `executable_change` | Any other artifact, including unknown types |
+| `high` | `shell_source` | `.sh`, `.bash`, `.zsh`, a leading `#!` line, or a file under `.github/workflows/` |
+| `high` | `process_boundary` | A leading `#!` line, an `os/exec` import, `os.StartProcess`, or `syscall.Exec` |
+| `high` | `hot_path` | A path segment starting with `auth`, `secur`, `secret`, `credential`, `permission`, or `sandbox` |
+| `high` | `agent_escalation` | The caller cites high-risk item 1-6 with a reason; escalation only raises |
+| `high` | `unassessable` | The snapshot cannot be loaded and verified |
+
+The tier is the highest any artifact or escalation reaches, and the reasons list only that tier's signals, in artifact order, without duplicates. Size never changes the tier. `review_due` is true only for `high`. The router stores the assessment as `risk` in `workflow.json` beside the candidate. Nothing consumes the tier yet; candidate-bound consent and independent review remain planned in the [roadmap](roadmap.md). Commit-slice budgeting is not part of the current roadmap.
+
 ## Mutation boundary
 
 `internal/core/mutation` owns the only capability set version 1 permits: `repository:read`. Every other value is refused by name, and an unrecognized capability is refused too, so the guard fails closed instead of tolerating a spelling it did not anticipate.
