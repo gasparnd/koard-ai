@@ -69,6 +69,8 @@ func Run(args []string, cwd string, stdout, stderr io.Writer) int {
 		}
 		fmt.Fprintf(stdout, "Koard project configuration is valid (schema version %d).\n", projectConfig.SchemaVersion)
 		return 0
+	case "review":
+		return runReview(args[1:], cwd, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "koard: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, "Run 'koard help' to see available commands.")
@@ -127,6 +129,8 @@ Usage:
 Commands:
   init       Create the project-level Koard structure
   doctor     Check the local Koard configuration
+  review mode <status|enable|disable> [--scope clone|global]
+             Show or set the user-owned review mode
   version    Print the CLI version
   help       Show this help`)
 }
