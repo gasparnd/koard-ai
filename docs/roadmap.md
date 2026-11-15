@@ -16,7 +16,7 @@ Koard grows through executable vertical slices. Planned functionality is documen
 - [x] Versioned configuration parser and validator for schema version 1.
 - [x] Provider-independent, versioned request and result contracts for planner, executor, and verifier handoffs.
 - [x] Versioned ODD workflow state machine with blocking, resumption, and terminal states.
-- [ ] Structured event and diagnostic output.
+- [x] Versioned JSON Lines contract for structured events and diagnostics.
 
 ## Receipt-driven development
 

@@ -29,6 +29,7 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | `architecture.md` | Components, contracts, and dependency direction |
 | `configuration.md` | Current configuration schema and validation rules |
 | `contributing.md` | Development workflow and checks |
+| `events.md` | Structured workflow events and diagnostics |
 | `handoffs.md` | Versioned request and result contracts between roles |
 | `odd.md` | ODD states, transitions, and interruption behavior |
 | `roadmap.md` | Current state and incremental milestones |

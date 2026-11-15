@@ -6,7 +6,7 @@ The project is inspired by the orchestration principles behind Gentle AI, but it
 
 ## Current status
 
-Koard is in its bootstrap phase. The current CLI can initialize a project and strictly validate its versioned configuration. The core defines provider-neutral handoff contracts and a versioned ODD state machine with explicit blocking, resumption, and terminal behavior. Model adapters, Engram integration, workflow execution, and skill generation are planned but are not implemented yet.
+Koard is in its bootstrap phase. The current CLI can initialize a project and strictly validate its versioned configuration. The core defines provider-neutral handoffs, a versioned ODD state machine, and a strict JSON Lines contract for workflow events and diagnostics. Model adapters, Engram integration, workflow execution, and skill generation are planned but are not implemented yet.
 
 ## Quick start
 

@@ -42,6 +42,12 @@ The provider-neutral state machine in `internal/core/odd` owns legal ODD transit
 
 The state machine does not execute models, write event logs, or authorize delivery. Those responsibilities remain outside the transition core.
 
+## Events and diagnostics
+
+`internal/core/eventstream` defines a strict JSON Lines contract for observable workflow output. Every record has a version, identity, workflow identity, monotonic sequence supplied by the orchestrator, and timestamp. A record contains exactly one event or diagnostic payload.
+
+The contract does not choose storage, generate identities, or infer event meaning from text. The future orchestrator will create records from accepted state transitions and validated handoff outcomes. See `events.md` for the wire format.
+
 ## Project layout
 
 ```text

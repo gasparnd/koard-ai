@@ -11,4 +11,4 @@ Koard's Organic Driven Development workflow follows six active states:
 
 The versioned state machine in `internal/core/odd` enforces this order. `completed` is the successful terminal state. Any active state may move to `blocked`, retain its exact resume state, and later resume. `stopped` is terminal and represents an explicit stop rather than successful completion.
 
-The state machine controls legal transitions only. Structured event persistence, diagnostics, handoff execution, and runtime adapters are separate roadmap capabilities.
+The state machine controls legal transitions only. The core event-stream contract can represent transitions and diagnostics, but persistence, handoff execution, and runtime adapters remain separate roadmap capabilities.
