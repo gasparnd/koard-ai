@@ -85,6 +85,8 @@ A request requires unique handoff and task identities, distinct valid source and
 
 Result status is one of `completed`, `blocked`, or `failed`. The result must reference the exact request ID and must come from the request's destination role. Artifacts and evidence use explicit references so future immutable candidate and RDD contracts can bind their digests.
 
+A completed executor result is what `internal/core/candidate` turns into a candidate: the identity is the SHA-256 digest of the result summary plus its artifacts and evidence, so the references declared here are the content the identity binds.
+
 ## Validation guarantees
 
 The implementation in `internal/core/handoff`:
@@ -99,4 +101,8 @@ The implementation in `internal/core/handoff`:
 
 The proposal-only OpenCode adapter implements this protocol without changing its semantics. It validates a request before invocation, permits only the `repository:read` capability, requires a JSON result, and applies the same strict decoding and identity/role binding described above.
 
-The adapter does not authorize the next transition returned by a model. Agent routing and workflow persistence remain later orchestration responsibilities.
+The agent router composes this protocol into a fixed route: the planner hands off to the executor, then the executor hands off to the verifier. Each hop is an independent request/result pair with its own identity, so a result can only answer the handoff it was created for.
+
+The second request carries what it must verify: a `Context` reference with kind `koard.handoff.result`, a state-relative URI, and a `sha256:` digest of the persisted result bytes, followed by any artifact the responder declared. The verifier therefore inspects the exact proposal instead of a paraphrase of it.
+
+The adapter does not authorize the next transition returned by a model. Agent routing records the route, and later workflow phases decide transitions.

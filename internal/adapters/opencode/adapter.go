@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/koard-ai/koard/internal/core/handoff"
+	"github.com/koard-ai/koard/internal/core/mutation"
 )
 
 const (
@@ -90,6 +91,13 @@ func newAdapter(config Config, runner commandRunner) (*Adapter, error) {
 	}, nil
 }
 
+// Execute runs one handoff through the proposal-only path. It exists so the
+// adapter satisfies the router's runner contract without the core importing a
+// provider package.
+func (adapter *Adapter) Execute(ctx context.Context, request handoff.Request) (handoff.Result, error) {
+	return adapter.Propose(ctx, request)
+}
+
 // Propose performs a read-only OpenCode run and returns exactly one result
 // bound to the supplied request. It never enables OpenCode auto-approval,
 // worktrees, or session continuation.
@@ -145,10 +153,8 @@ func validateProposalRequest(request handoff.Request) error {
 	if request.ExpectedOutput.Format != "application/json" {
 		return fmt.Errorf("proposal expected_output.format must be %q", "application/json")
 	}
-	for _, capability := range request.Capabilities {
-		if capability != "repository:read" {
-			return fmt.Errorf("capability %q is not allowed for proposal-only execution", capability)
-		}
+	if err := mutation.RequireReadOnly(request.Capabilities); err != nil {
+		return fmt.Errorf("proposal request rejected: %w", err)
 	}
 	return nil
 }

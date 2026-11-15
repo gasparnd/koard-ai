@@ -2,7 +2,7 @@
 
 Koard represents machine-readable workflow output as JSON Lines. Each line is one independently decodable, versioned record associated with a workflow.
 
-The core defines the format and validation rules. It does not yet persist records or expose a CLI output flag.
+The core defines the format and validation rules. The agent router now creates and persists records for one routed workflow under `.koard/state/runs/<workflow_id>/events.jsonl`. A human-facing CLI output flag does not exist yet.
 
 ## Event record
 
@@ -37,7 +37,7 @@ Invalid records produce no writer output. The stream decoder reads records seque
 
 ## Responsibility boundary
 
-The event stream does not:
+The event stream itself does not:
 
 - create record IDs, sequences, or timestamps;
 - persist or transmit records;
@@ -45,4 +45,4 @@ The event stream does not:
 - assign authority to an event;
 - replace handoff validation or ODD transition validation.
 
-The first working orchestrator will own record creation and connect accepted state transitions and handoff outcomes to this stream.
+The agent router owns record creation and persistence for a routed workflow. It emits `handoff.started`, `handoff.completed`, and a diagnostic when the run stops: `KOARD_HANDOFF_INVALID` when a result fails binding, `KOARD_WORKFLOW_CANCELLED` (warning) when the caller's context stops the run, and `KOARD_WORKFLOW_FAILED` for every other failure. A run cancelled before it starts claims no workflow identity and writes no record. Because a record carries either an event or a diagnostic payload, never both, the diagnostic detail names the handoff that was executing. The router does not yet connect ODD state transitions to this stream.
