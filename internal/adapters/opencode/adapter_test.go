@@ -8,6 +8,7 @@ import (
 
 	"github.com/koard-ai/koard/internal/core/agentrouter"
 	"github.com/koard-ai/koard/internal/core/handoff"
+	"github.com/koard-ai/koard/internal/core/mutation"
 )
 
 // The router depends on this structural contract; pin it here so a signature
@@ -63,6 +64,12 @@ func TestAdapterRejectsNonProposalCapabilities(t *testing.T) {
 	_, err := adapter.Propose(context.Background(), request)
 	if err == nil || !strings.Contains(err.Error(), "repository:write") {
 		t.Fatalf("expected unsupported capability error, got %v", err)
+	}
+	// The adapter must fail through the shared boundary, not its own check, so
+	// the two callers cannot drift apart.
+	var blocked *mutation.BlockedError
+	if !errors.As(err, &blocked) {
+		t.Fatalf("expected the shared mutation block, got %T", err)
 	}
 	if len(runner.commands) != 0 {
 		t.Fatalf("unsafe request invoked OpenCode %d times", len(runner.commands))

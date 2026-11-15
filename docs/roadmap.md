@@ -28,7 +28,7 @@ Koard will build one real but non-mutating orchestration path before RDD. RDD wi
 - [x] Agent Router v1 with a fixed planner → executor → verifier route.
 - [x] Persist typed handoffs and structured events for one workflow.
 - [x] Produce a candidate proposal with a deterministic identity.
-- [ ] Enforce a hard stop before workspace mutation, commit, push, pull request, merge, or release.
+- [x] Enforce a hard stop before workspace mutation, commit, push, pull request, merge, or release.
 - [ ] Verify replay, idempotency, cancellation, crash recovery, and stale-candidate rejection.
 
 ### 2. Receipt-driven development

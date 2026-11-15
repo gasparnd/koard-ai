@@ -16,6 +16,7 @@ import (
 	"github.com/koard-ai/koard/internal/core/candidate"
 	"github.com/koard-ai/koard/internal/core/eventstream"
 	"github.com/koard-ai/koard/internal/core/handoff"
+	"github.com/koard-ai/koard/internal/core/mutation"
 )
 
 const CurrentSchemaVersion = 1
@@ -49,6 +50,9 @@ type Options struct {
 	StateDir   string
 	Runner     Runner
 	Clock      func() time.Time
+	// Capabilities requested for the routed handoffs. Empty means the
+	// read-only set. Any value outside that set stops the run.
+	Capabilities []string
 }
 
 // Outcome is the persisted record of one routed workflow.
@@ -192,6 +196,14 @@ func validateOptions(options Options) (Options, error) {
 	if options.Runner == nil {
 		return Options{}, errors.New("runner is required")
 	}
+	if len(options.Capabilities) == 0 {
+		options.Capabilities = mutation.ReadOnlyCapabilities()
+	}
+	// The hard stop runs before any state is created, so a refused run leaves
+	// nothing behind for a later attempt to trip over.
+	if err := mutation.RequireReadOnly(options.Capabilities); err != nil {
+		return Options{}, err
+	}
 	if options.Clock == nil {
 		options.Clock = time.Now
 	}
@@ -214,7 +226,7 @@ func newRequest(options Options, step Step, index int, objective string, carried
 		To:            step.To,
 		Objective:     objective,
 		Context:       carried,
-		Capabilities:  []string{"repository:read"},
+		Capabilities:  append([]string(nil), options.Capabilities...),
 		ExpectedOutput: handoff.OutputContract{
 			Format: "application/json",
 			Schema: "koard://schemas/handoff-result/v1",

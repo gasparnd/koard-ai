@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/koard-ai/koard/internal/core/handoff"
+	"github.com/koard-ai/koard/internal/core/mutation"
 )
 
 const (
@@ -152,10 +153,8 @@ func validateProposalRequest(request handoff.Request) error {
 	if request.ExpectedOutput.Format != "application/json" {
 		return fmt.Errorf("proposal expected_output.format must be %q", "application/json")
 	}
-	for _, capability := range request.Capabilities {
-		if capability != "repository:read" {
-			return fmt.Errorf("capability %q is not allowed for proposal-only execution", capability)
-		}
+	if err := mutation.RequireReadOnly(request.Capabilities); err != nil {
+		return fmt.Errorf("proposal request rejected: %w", err)
 	}
 	return nil
 }

@@ -74,6 +74,14 @@ The identity binds what the protocol actually carries: declared references and t
 
 The router records the candidate in `workflow.json` as soon as the executor hop completes, and a blocked or failed executor produces no candidate at all.
 
+## Mutation boundary
+
+`internal/core/mutation` owns the only capability set version 1 permits: `repository:read`. Every other value is refused by name, and an unrecognized capability is refused too, so the guard fails closed instead of tolerating a spelling it did not anticipate.
+
+The router checks the requested capabilities before it creates any state, so a refused run leaves nothing behind. The OpenCode adapter checks the same set before spawning a process, which makes one list the single source of truth for both callers instead of two comparisons that can drift.
+
+The boundary covers what no code path performs yet. Nothing in Koard commits, pushes, opens a pull request, merges, or releases, and applying a candidate does not exist, so those capabilities are refused explicitly rather than left advertised and unimplemented.
+
 ## Runtime adapters
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role.
 

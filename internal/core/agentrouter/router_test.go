@@ -16,6 +16,7 @@ import (
 
 	"github.com/koard-ai/koard/internal/core/eventstream"
 	"github.com/koard-ai/koard/internal/core/handoff"
+	"github.com/koard-ai/koard/internal/core/mutation"
 )
 
 func TestRouteRunsFixedRouteAndBindsResults(t *testing.T) {
@@ -276,6 +277,43 @@ func TestRouteContextDigestIsUniquePerHandoff(t *testing.T) {
 	}
 	if digest := runner.requests[1].Context[0].Digest; digest == "" || digest == "sha256:"+digestOf(nil) {
 		t.Fatalf("empty result reference digest: %q", digest)
+	}
+}
+
+func TestRouteRejectsMutatingCapabilitiesBeforeTouchingState(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{}
+	options := testOptions(t, runner)
+	options.Capabilities = []string{mutation.CapabilityRead, "git:push"}
+
+	_, err := Route(context.Background(), options)
+	if err == nil || !strings.Contains(err.Error(), "git:push") {
+		t.Fatalf("expected a blocked mutation capability, got %v", err)
+	}
+	if len(runner.requests) != 0 {
+		t.Fatalf("a blocked run invoked the runner %d times", len(runner.requests))
+	}
+	entries, readErr := os.ReadDir(options.StateDir)
+	if readErr != nil {
+		t.Fatalf("read state dir: %v", readErr)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("a blocked run left %d entries in the state dir", len(entries))
+	}
+}
+
+func TestRouteRequestsAreReadOnly(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{}
+	if _, err := Route(context.Background(), testOptions(t, runner)); err != nil {
+		t.Fatalf("route workflow: %v", err)
+	}
+	for index, request := range runner.requests {
+		if len(request.Capabilities) != 1 || request.Capabilities[0] != mutation.CapabilityRead {
+			t.Fatalf("handoff %d is not read-only: %#v", index+1, request.Capabilities)
+		}
 	}
 }
 
