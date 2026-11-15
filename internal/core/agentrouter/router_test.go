@@ -258,6 +258,112 @@ func TestRouteKeepsCompletedStepsInFailedOutcome(t *testing.T) {
 	}
 }
 
+func TestRouteRecordsCancellationAsItsOwnTerminalRecord(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// The process runner reports a killed process, not a context error, so the
+	// router has to recognise the cancellation itself.
+	runner := &fakeRunner{failure: errors.New("signal: killed"), cancel: cancel}
+	options := testOptions(t, runner)
+
+	outcome, err := Route(ctx, options)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("the returned error must report the cancellation, got %v", err)
+	}
+	if outcome.Status != handoff.StatusFailed {
+		t.Fatalf("returned status is %q, expected failed", outcome.Status)
+	}
+
+	persisted := readOutcome(t, filepath.Join(options.StateDir, options.WorkflowID, "workflow.json"))
+	if persisted.Status != handoff.StatusFailed {
+		t.Fatalf("persisted status is %q, expected failed", persisted.Status)
+	}
+	if len(persisted.Results) != 0 {
+		t.Fatalf("a cancelled handoff must not enter the record: %#v", persisted.Results)
+	}
+
+	records := readRecords(t, filepath.Join(options.StateDir, options.WorkflowID, "events.jsonl"))
+	last := records[len(records)-1]
+	if last.Kind != eventstream.KindDiagnostic || last.Diagnostic == nil {
+		t.Fatalf("the cancellation was not recorded as a diagnostic: %#v", last)
+	}
+	if last.Diagnostic.Code != "KOARD_WORKFLOW_CANCELLED" {
+		t.Fatalf("diagnostic code is %q, expected KOARD_WORKFLOW_CANCELLED", last.Diagnostic.Code)
+	}
+	// Nothing malfunctioned in the workflow, so the stop is a warning.
+	if last.Diagnostic.Severity != eventstream.SeverityWarning {
+		t.Fatalf("diagnostic severity is %q, expected warning", last.Diagnostic.Severity)
+	}
+	if !strings.Contains(last.Diagnostic.Detail, "workflow-1-1") {
+		t.Fatalf("diagnostic detail %q does not name the cancelled handoff", last.Diagnostic.Detail)
+	}
+	if !strings.Contains(last.Diagnostic.Detail, context.Canceled.Error()) {
+		t.Fatalf("diagnostic detail %q does not name the cause", last.Diagnostic.Detail)
+	}
+	for _, record := range records {
+		if record.Kind == eventstream.KindDiagnostic && record.Diagnostic.Code == "KOARD_WORKFLOW_FAILED" {
+			t.Fatal("a cancellation must not be recorded as a workflow failure")
+		}
+	}
+}
+
+func TestRouteDoesNotClaimIdentityWhenAlreadyCancelled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	runner := &fakeRunner{}
+	options := testOptions(t, runner)
+
+	outcome, err := Route(ctx, options)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected a cancellation error, got %v", err)
+	}
+	if len(outcome.Handoffs) != 0 {
+		t.Fatalf("a cancelled run reported handoffs: %#v", outcome.Handoffs)
+	}
+	if len(runner.requests) != 0 {
+		t.Fatalf("a cancelled run reached the runner %d times", len(runner.requests))
+	}
+	// A run that never starts spends nothing, so its identity stays available.
+	if _, statErr := os.Stat(filepath.Join(options.StateDir, options.WorkflowID)); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("a cancelled run must claim no identity, stat error: %v", statErr)
+	}
+}
+
+func TestRouteStopsBetweenHandoffsWhenCancelled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runner := &fakeRunner{cancelAfterFirst: cancel}
+	options := testOptions(t, runner)
+
+	outcome, err := Route(ctx, options)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected a cancellation error, got %v", err)
+	}
+	if len(outcome.Handoffs) != 1 || len(outcome.Results) != 1 {
+		t.Fatalf("only the completed handoff may stay, got %d handoffs and %d results", len(outcome.Handoffs), len(outcome.Results))
+	}
+	if len(runner.requests) != 1 {
+		t.Fatalf("the second handoff must not start, runner saw %d requests", len(runner.requests))
+	}
+	handoffsDir := filepath.Join(options.StateDir, options.WorkflowID, "handoffs")
+	if _, statErr := os.Stat(filepath.Join(handoffsDir, requestFile(2))); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("the second request must not be written, stat error: %v", statErr)
+	}
+
+	records := readRecords(t, filepath.Join(options.StateDir, options.WorkflowID, "events.jsonl"))
+	last := records[len(records)-1]
+	if last.Diagnostic == nil || last.Diagnostic.Code != "KOARD_WORKFLOW_CANCELLED" {
+		t.Fatalf("the last record is not the cancellation diagnostic: %#v", last)
+	}
+	if !strings.Contains(last.Diagnostic.Detail, "workflow-1-2") {
+		t.Fatalf("diagnostic detail %q does not name the handoff that did not run", last.Diagnostic.Detail)
+	}
+}
+
 func TestRouteRecordsFailureDiagnosticBoundToTheFailingHandoff(t *testing.T) {
 	t.Parallel()
 
@@ -621,10 +727,17 @@ type fakeRunner struct {
 	failureAt      int
 	artifacts      []handoff.Reference
 	overrideResult func(*handoff.Result)
+	// cancel is called when the runner starts, before it reports its failure.
+	cancel context.CancelFunc
+	// cancelAfterFirst is called once the first call has produced its result.
+	cancelAfterFirst context.CancelFunc
 }
 
 func (runner *fakeRunner) Execute(ctx context.Context, request handoff.Request) (handoff.Result, error) {
 	runner.requests = append(runner.requests, request)
+	if runner.cancel != nil {
+		runner.cancel()
+	}
 	if runner.failure != nil && (runner.failureAt == 0 || runner.failureAt == len(runner.requests)) {
 		return handoff.Result{}, runner.failure
 	}
@@ -643,6 +756,9 @@ func (runner *fakeRunner) Execute(ctx context.Context, request handoff.Request) 
 	}
 	if runner.overrideResult != nil {
 		runner.overrideResult(&result)
+	}
+	if runner.cancelAfterFirst != nil && len(runner.requests) == 1 {
+		runner.cancelAfterFirst()
 	}
 	return result, nil
 }
