@@ -14,7 +14,16 @@ Objective: implement the first governed-orchestration milestone without enabling
 
 ## Tasks
 
-- [x] T1 — S1-S7 — route: inline (no writer trigger; one coherent behavior) — risk: item 2 (capability guard) and item 5 (external OpenCode runtime contract) — evidence: `go test ./internal/adapters/opencode`, `go test ./...`, `go vet ./...` all pass; commit: pending.
+- [x] T1 — S1-S7 — route: inline (no writer trigger; one coherent behavior) — risk: item 2 (capability guard) and item 5 (external OpenCode runtime contract) — evidence: `go test ./internal/adapters/opencode`, `go test ./...`, `go vet ./...` all pass; commit: `a206c9b`.
+
+## Follow-ups (non-blocking, from the approved review)
+
+- Scope the read/glob/grep policy resources to the workspace instead of wildcard resources, and consider a workspace-confined read policy.
+- Narrow the inherited child environment instead of forwarding the whole parent environment.
+- Add tests for `mergeEnvironment` precedence, the real `execRunner` seam, constructor error branches, the JSON-format and empty-capability request guards, version boundary 2.2.3, cross-major versions, and the omitted `--agent` branch.
+- Add an execution deadline or bounded budget around the proposal run.
+- Anchor the version regex so a foreign SemVer in the banner cannot flip the gate.
+- Consider bounding captured stdout/stderr and retaining partial stdout in the error path.
 
 ## Log
 
@@ -25,3 +34,4 @@ Objective: implement the first governed-orchestration milestone without enabling
 - L5 (2026-11-15): RED observed first: `go test ./internal/adapters/opencode` failed with undefined adapter symbols before `adapter.go` existed. GREEN followed the implementation in `internal/adapters/opencode/adapter.go` and `adapter_test.go`.
 - L6 (2026-11-15): Parent verification: focused package test, full suite, and `go vet ./...` pass; `gofmt -l` reports no formatting drift. The independent verifier could not run because the delegation provider returned `subscription_sharing_usage_limit_exceeded`, so independent proof stays unavailable rather than passing.
 - L7 (2026-11-15): Documented the residual guard limitation: managed and Console OpenCode policy outrank inline configuration, so an administrator allow can widen the deny set; the adapter still passes no auto-approval flag, so surviving permissions fail instead of being granted.
+- L8 (2026-11-15): Work unit committed as `a206c9b`; RDD assessment returned `high_risk` and the native review over lineage `review-616d2f9f73b8273f` approved the candidate with three lenses. Acknowledgement burned the review authority; the fourteen reported findings are informational follow-ups listed above and do not reopen scope.
