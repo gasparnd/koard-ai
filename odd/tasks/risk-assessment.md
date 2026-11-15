@@ -24,7 +24,7 @@ Objective: classify each candidate snapshot into a passive, medium, or high risk
 
 ## Tasks
 
-- [x] T1 — S1-S9 — route: inline (one behavior, no writer trigger) — risk: none (nothing consumes the tier yet) — commit: pending (the user commits by hand).
+- [x] T1 — S1-S9 — route: inline (one behavior, no writer trigger) — risk: none (nothing consumes the tier yet) — commit: this work-unit commit.
 
 ## Log
 
