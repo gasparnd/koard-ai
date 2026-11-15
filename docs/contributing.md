@@ -28,3 +28,20 @@ go vet ./...
 ## Pull requests
 
 Explain the outcome, architectural impact, verification performed, and any capability intentionally left for a later milestone. Do not mix unrelated provider adapters in one change.
+
+## Branching
+
+Every roadmap step has one integration branch named `step/<number>-<slug>`, and every task inside that step has its own branch named `task/<step>.<task>-<slug>`.
+
+```text
+develop
+ └── step/1-non-mutating-walking-skeleton     pull request → develop (umbrella, draft)
+      ├── task/1.6-cancellation               pull request → step/1 (one task)
+      └── task/1.7-next-slice                 pull request → step/1 (one task)
+```
+
+- Create each task branch from the current tip of its step branch, and open its pull request against the step branch. That keeps the reviewed diff limited to one task while the step branch accumulates the work.
+- Keep the step pull request in draft until the step is complete. It is the umbrella review for the whole step, and it targets `develop`.
+- Do not open a task pull request against `develop`. A step that lands task by task without its umbrella loses the step-level review it exists for.
+- State the review budget of every task pull request, counted as additions plus deletions. A step umbrella exceeds the usual budget by construction; say so there instead of compressing the change.
+
