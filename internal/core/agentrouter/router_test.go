@@ -14,9 +14,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/koard-ai/koard/internal/core/candidate"
 	"github.com/koard-ai/koard/internal/core/eventstream"
 	"github.com/koard-ai/koard/internal/core/handoff"
 	"github.com/koard-ai/koard/internal/core/mutation"
+	"github.com/koard-ai/koard/internal/core/snapshot"
 )
 
 func TestRouteRunsFixedRouteAndBindsResults(t *testing.T) {
@@ -449,9 +451,12 @@ func TestRouteSecondObjectiveReferencesOriginal(t *testing.T) {
 func TestRouteCarriesPreviousResultToNextHandoff(t *testing.T) {
 	t.Parallel()
 
-	artifact := handoff.Reference{Kind: "proposal", URI: "koard://proposals/task-1", Digest: "sha256:proposal"}
+	artifact := handoff.Reference{Kind: "source", URI: "repo://proposal.go"}
 	runner := &fakeRunner{artifacts: []handoff.Reference{artifact}}
 	options := testOptions(t, runner)
+	if err := os.WriteFile(filepath.Join(options.Workspace, "proposal.go"), []byte("package proposal\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	outcome, err := Route(context.Background(), options)
 	if err != nil {
 		t.Fatalf("route workflow: %v", err)
@@ -575,6 +580,187 @@ func TestRouteProducesDeterministicCandidate(t *testing.T) {
 	}
 }
 
+func TestRouteSnapshotsTheCandidateArtifacts(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{artifacts: []handoff.Reference{{Kind: "source", URI: "repo://internal/change.go"}}}
+	options := testOptions(t, runner)
+	if err := os.MkdirAll(filepath.Join(options.Workspace, "internal"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(options.Workspace, "internal", "change.go"), []byte("package internal\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := Route(context.Background(), options)
+	if err != nil {
+		t.Fatalf("route workflow: %v", err)
+	}
+	if outcome.Candidate == nil || !strings.HasPrefix(outcome.Candidate.SnapshotID, "sha256:") {
+		t.Fatalf("the candidate has no snapshot identity: %#v", outcome.Candidate)
+	}
+
+	persisted := readOutcome(t, filepath.Join(options.StateDir, options.WorkflowID, "workflow.json"))
+	if persisted.Candidate == nil || persisted.Candidate.SnapshotID != outcome.Candidate.SnapshotID {
+		t.Fatalf("the snapshot identity was not persisted: %#v", persisted.Candidate)
+	}
+	loaded, err := snapshot.Load(filepath.Join(options.StateDir, options.WorkflowID, "snapshot"), outcome.Candidate.SnapshotID)
+	if err != nil {
+		t.Fatalf("the persisted snapshot does not verify: %v", err)
+	}
+	if loaded.Manifest.CandidateID != outcome.Candidate.ID {
+		t.Fatalf("the snapshot binds candidate %q, expected %q", loaded.Manifest.CandidateID, outcome.Candidate.ID)
+	}
+	if len(loaded.Manifest.Entries) != 1 || loaded.Manifest.Entries[0].URI != "repo://internal/change.go" {
+		t.Fatalf("unexpected snapshot entries: %#v", loaded.Manifest.Entries)
+	}
+}
+
+func TestRouteSnapshotIdentityFollowsBytesNotCandidate(t *testing.T) {
+	t.Parallel()
+
+	route := func(content string) *candidate.Candidate {
+		t.Helper()
+		runner := &fakeRunner{artifacts: []handoff.Reference{{Kind: "source", URI: "repo://change.go"}}}
+		options := testOptions(t, runner)
+		if err := os.WriteFile(filepath.Join(options.Workspace, "change.go"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		outcome, err := Route(context.Background(), options)
+		if err != nil {
+			t.Fatalf("route workflow: %v", err)
+		}
+		return outcome.Candidate
+	}
+
+	first, second := route("one"), route("two")
+	if first.ID != second.ID {
+		t.Fatalf("the snapshot changed the candidate identity: %q and %q", first.ID, second.ID)
+	}
+	if first.SnapshotID == second.SnapshotID {
+		t.Fatal("different bytes behind the same reference produced the same snapshot identity")
+	}
+}
+
+func TestRouteRecordsCancellationDuringSnapshotCapture(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runner := &fakeRunner{
+		artifacts:        []handoff.Reference{{Kind: "source", URI: "repo://change.go"}},
+		cancelAfterFirst: cancel,
+	}
+	options := testOptions(t, runner)
+	if err := os.WriteFile(filepath.Join(options.Workspace, "change.go"), []byte("package change\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outcome, err := Route(ctx, options)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected a cancellation error, got %v", err)
+	}
+	if outcome.Candidate != nil {
+		t.Fatalf("a candidate whose capture was cancelled was recorded: %#v", outcome.Candidate)
+	}
+
+	workflowDir := filepath.Join(options.StateDir, options.WorkflowID)
+	records := readRecords(t, filepath.Join(workflowDir, "events.jsonl"))
+	last := records[len(records)-1]
+	if last.Diagnostic == nil || last.Diagnostic.Code != "KOARD_WORKFLOW_CANCELLED" {
+		t.Fatalf("a cancelled capture was not recorded as a cancellation: %#v", last)
+	}
+	if !strings.Contains(last.Diagnostic.Detail, "workflow-1-1") {
+		t.Fatalf("diagnostic detail %q does not name the executor handoff", last.Diagnostic.Detail)
+	}
+	for _, record := range records {
+		if record.Diagnostic != nil && record.Diagnostic.Code == "KOARD_SNAPSHOT_REFUSED" {
+			t.Fatal("a cancellation must not be recorded as a refused snapshot")
+		}
+	}
+	if _, statErr := os.Stat(filepath.Join(workflowDir, "snapshot", "manifest.json")); !os.IsNotExist(statErr) {
+		t.Fatal("a cancelled capture left a manifest")
+	}
+}
+
+func TestRouteRefusesCandidateWhoseSnapshotFails(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{artifacts: []handoff.Reference{{Kind: "proposal", URI: "koard://proposals/task-1"}}}
+	options := testOptions(t, runner)
+
+	outcome, err := Route(context.Background(), options)
+	if err == nil {
+		t.Fatal("a candidate with an unsnapshottable artifact was accepted")
+	}
+	if outcome.Status != handoff.StatusFailed || outcome.Candidate != nil {
+		t.Fatalf("expected a failed outcome without a candidate, got %#v", outcome)
+	}
+	if len(runner.requests) != 1 {
+		t.Fatalf("the verifier must not run for a refused candidate, runner saw %d requests", len(runner.requests))
+	}
+
+	workflowDir := filepath.Join(options.StateDir, options.WorkflowID)
+	persisted := readOutcome(t, filepath.Join(workflowDir, "workflow.json"))
+	if persisted.Status != handoff.StatusFailed || persisted.Candidate != nil {
+		t.Fatalf("persisted a refused candidate: %#v", persisted)
+	}
+	if _, statErr := os.Stat(filepath.Join(workflowDir, "snapshot", "manifest.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("a refused snapshot left a manifest, stat error: %v", statErr)
+	}
+
+	records := readRecords(t, filepath.Join(workflowDir, "events.jsonl"))
+	last := records[len(records)-1]
+	if last.Diagnostic == nil || last.Diagnostic.Code != "KOARD_SNAPSHOT_REFUSED" {
+		t.Fatalf("the refusal was not recorded as KOARD_SNAPSHOT_REFUSED: %#v", last)
+	}
+	if last.Diagnostic.Severity != eventstream.SeverityError {
+		t.Fatalf("diagnostic severity is %q, expected error", last.Diagnostic.Severity)
+	}
+	for _, expected := range []string{"workflow-1-1", "koard://proposals/task-1"} {
+		if !strings.Contains(last.Diagnostic.Detail, expected) {
+			t.Fatalf("diagnostic detail %q does not name %q", last.Diagnostic.Detail, expected)
+		}
+	}
+	for _, record := range records {
+		if record.Diagnostic != nil && record.Diagnostic.Code == "KOARD_WORKFLOW_FAILED" {
+			t.Fatal("a refused snapshot must not add a generic failure diagnostic")
+		}
+	}
+}
+
+func TestRouteRequiresWorkspace(t *testing.T) {
+	t.Parallel()
+
+	for name, workspace := range map[string]string{
+		"empty":   "",
+		"missing": filepath.Join(t.TempDir(), "missing"),
+		"file":    writeTempFile(t),
+	} {
+		runner := &fakeRunner{}
+		options := testOptions(t, runner)
+		options.Workspace = workspace
+
+		if _, err := Route(context.Background(), options); err == nil {
+			t.Errorf("%s workspace: route accepted it", name)
+		}
+		if len(runner.requests) != 0 {
+			t.Errorf("%s workspace: the runner was reached", name)
+		}
+		if _, statErr := os.Stat(filepath.Join(options.StateDir, options.WorkflowID)); !os.IsNotExist(statErr) {
+			t.Errorf("%s workspace: an identity was claimed", name)
+		}
+	}
+}
+
+func writeTempFile(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestRouteOmitsCandidateWhenExecutorDoesNotComplete(t *testing.T) {
 	t.Parallel()
 
@@ -629,6 +815,7 @@ func testOptions(t *testing.T, runner Runner) Options {
 		TaskID:     "task-1",
 		Objective:  "Propose the requested change without modifying the workspace.",
 		StateDir:   t.TempDir(),
+		Workspace:  t.TempDir(),
 		Runner:     runner,
 		Clock:      func() time.Time { return time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC) },
 	}
