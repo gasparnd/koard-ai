@@ -58,9 +58,9 @@ The router validates options and every request before execution, binds each resu
 - `handoffs/<step>-request.json` and `handoffs/<step>-result.json`;
 - `events.jsonl`, the structured event stream with monotonic sequence.
 
-State files are written atomically, and a workflow identity is claimed with an atomic directory creation so a concurrent or replayed run fails instead of interleaving files. Each hop after the first carries the previous result as a digest-bound `Context` reference, so the next role inspects the exact persisted bytes instead of a paraphrase. The router never mutates the workspace, never performs delivery operations, and never authorizes a model-returned `next` transition.
+State files are written atomically, and a workflow identity is claimed with an atomic directory creation so a concurrent or replayed run fails instead of interleaving files. A claimed identity always leaves a readable record: every step writes through one object with a single persist point, so a run that stops still persists `workflow.json` with status `failed`, keeping the steps that did complete. The failure is also recorded as a diagnostic in `events.jsonl`, naming the handoff that was executing and the cause. Each hop after the first carries the previous result as a digest-bound `Context` reference, so the next role inspects the exact persisted bytes instead of a paraphrase. The router never mutates the workspace, never performs delivery operations, and never authorizes a model-returned `next` transition.
 
-Provider execution enters through one injected runner interface. The OpenCode adapter satisfies it structurally, so the core keeps its inward-only dependency direction. Routing policies beyond the fixed route, ODD state-machine integration, retries, and CLI wiring remain later work.
+Provider execution enters through one injected runner interface. The OpenCode adapter satisfies it structurally, so the core keeps its inward-only dependency direction. Routing policies beyond the fixed route, ODD state-machine integration, retries, resuming an incomplete workflow, cancellation, and CLI wiring remain later work.
 
 ## Candidate identity
 

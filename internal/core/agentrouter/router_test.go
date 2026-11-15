@@ -195,8 +195,123 @@ func TestRouteRejectsUnboundResult(t *testing.T) {
 	if _, err := Route(context.Background(), options); err == nil || !strings.Contains(err.Error(), "does not match request destination") {
 		t.Fatalf("expected binding error, got %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(options.StateDir, options.WorkflowID, "workflow.json")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("unbound result must not persist a completed outcome, got %v", err)
+	// An unbound result must not be recorded as a completed workflow. The run
+	// stopped, so its record is terminal and failed.
+	persisted := readOutcome(t, filepath.Join(options.StateDir, options.WorkflowID, "workflow.json"))
+	if persisted.Status != handoff.StatusFailed {
+		t.Fatalf("persisted status is %q, expected failed", persisted.Status)
+	}
+	if len(persisted.Results) != 0 {
+		t.Fatalf("an unbound result must not enter the record: %#v", persisted.Results)
+	}
+}
+
+func TestRoutePersistsFailedOutcomeWhenRunnerFails(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{failure: errors.New("provider unavailable")}
+	options := testOptions(t, runner)
+
+	outcome, err := Route(context.Background(), options)
+	if err == nil || !strings.Contains(err.Error(), "provider unavailable") {
+		t.Fatalf("the runner failure must still reach the caller, got %v", err)
+	}
+	if outcome.Status != handoff.StatusFailed {
+		t.Fatalf("returned status is %q, expected failed", outcome.Status)
+	}
+
+	persisted := readOutcome(t, filepath.Join(options.StateDir, options.WorkflowID, "workflow.json"))
+	if persisted.Status != handoff.StatusFailed {
+		t.Fatalf("persisted status is %q, expected failed", persisted.Status)
+	}
+	if persisted.WorkflowID != options.WorkflowID || persisted.TaskID != options.TaskID {
+		t.Fatalf("the persisted record lost its identity: %#v", persisted)
+	}
+}
+
+func TestRouteKeepsCompletedStepsInFailedOutcome(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{failureAt: 2, failure: errors.New("verifier unavailable")}
+	options := testOptions(t, runner)
+
+	outcome, err := Route(context.Background(), options)
+	if err == nil || !strings.Contains(err.Error(), "verifier unavailable") {
+		t.Fatalf("expected the second handoff to fail, got %v", err)
+	}
+	if outcome.Status != handoff.StatusFailed {
+		t.Fatalf("status is %q, expected failed", outcome.Status)
+	}
+	if len(outcome.Handoffs) != 1 || len(outcome.Results) != 1 {
+		t.Fatalf("the completed step must survive, got %d handoffs and %d results", len(outcome.Handoffs), len(outcome.Results))
+	}
+	if outcome.Candidate == nil {
+		t.Fatal("the completed executor step must keep its candidate")
+	}
+
+	persisted := readOutcome(t, filepath.Join(options.StateDir, options.WorkflowID, "workflow.json"))
+	if persisted.Status != handoff.StatusFailed || len(persisted.Handoffs) != 1 {
+		t.Fatalf("the persisted record lost the completed step: %#v", persisted)
+	}
+	if persisted.Candidate == nil {
+		t.Fatal("the persisted record lost the candidate")
+	}
+}
+
+func TestRouteRecordsFailureDiagnosticBoundToTheFailingHandoff(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{failureAt: 2, failure: errors.New("verifier unavailable")}
+	options := testOptions(t, runner)
+
+	if _, err := Route(context.Background(), options); err == nil {
+		t.Fatal("expected a failure")
+	}
+
+	records := readRecords(t, filepath.Join(options.StateDir, options.WorkflowID, "events.jsonl"))
+	last := records[len(records)-1]
+	if last.Kind != eventstream.KindDiagnostic || last.Diagnostic == nil {
+		t.Fatalf("the failure was not recorded as a diagnostic: %#v", last)
+	}
+	if last.Diagnostic.Code != failedWorkflowCode {
+		t.Fatalf("diagnostic code is %q, expected %q", last.Diagnostic.Code, failedWorkflowCode)
+	}
+	if last.Diagnostic.Severity != eventstream.SeverityError {
+		t.Fatalf("diagnostic severity is %q, expected error", last.Diagnostic.Severity)
+	}
+	// The failing handoff is named in the detail because an event stream record
+	// cannot carry both an event and a diagnostic payload.
+	if !strings.Contains(last.Diagnostic.Detail, "workflow-1-2") {
+		t.Fatalf("diagnostic detail %q does not name the failing handoff", last.Diagnostic.Detail)
+	}
+	if !strings.Contains(last.Diagnostic.Detail, "verifier unavailable") {
+		t.Fatalf("diagnostic detail %q does not name the cause", last.Diagnostic.Detail)
+	}
+}
+
+func TestRouteKeepsOneDiagnosticForAnUnboundResult(t *testing.T) {
+	t.Parallel()
+
+	runner := &fakeRunner{overrideResult: func(result *handoff.Result) { result.Role = handoff.RolePlanner }}
+	options := testOptions(t, runner)
+
+	if _, err := Route(context.Background(), options); err == nil {
+		t.Fatal("expected a binding failure")
+	}
+
+	records := readRecords(t, filepath.Join(options.StateDir, options.WorkflowID, "events.jsonl"))
+	diagnostics := 0
+	for _, record := range records {
+		if record.Kind != eventstream.KindDiagnostic {
+			continue
+		}
+		diagnostics++
+		if record.Diagnostic.Code != invalidResultCode {
+			t.Fatalf("diagnostic code is %q, expected %q", record.Diagnostic.Code, invalidResultCode)
+		}
+	}
+	if diagnostics != 1 {
+		t.Fatalf("expected exactly one diagnostic, got %d", diagnostics)
 	}
 }
 
@@ -498,16 +613,19 @@ func resultFile(step int) string {
 }
 
 type fakeRunner struct {
-	requests       []handoff.Request
-	statuses       []handoff.Status
-	failure        error
+	requests []handoff.Request
+	statuses []handoff.Status
+	failure  error
+	// failureAt makes the failure happen on that 1-based call only. Zero means
+	// every call fails.
+	failureAt      int
 	artifacts      []handoff.Reference
 	overrideResult func(*handoff.Result)
 }
 
 func (runner *fakeRunner) Execute(ctx context.Context, request handoff.Request) (handoff.Result, error) {
 	runner.requests = append(runner.requests, request)
-	if runner.failure != nil {
+	if runner.failure != nil && (runner.failureAt == 0 || runner.failureAt == len(runner.requests)) {
 		return handoff.Result{}, runner.failure
 	}
 	status := handoff.StatusCompleted
