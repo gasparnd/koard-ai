@@ -31,7 +31,23 @@ const (
 	// failedWorkflowCode marks a diagnostic for a run that stopped for any
 	// other reason.
 	failedWorkflowCode = "KOARD_WORKFLOW_FAILED"
+	// cancelledWorkflowCode marks a run the caller stopped on purpose. It is a
+	// warning: nothing in the workflow malfunctioned.
+	cancelledWorkflowCode = "KOARD_WORKFLOW_CANCELLED"
 )
+
+// cancelled reports that the caller's context stopped the run while handoffID
+// was the handoff in progress or the next one to start.
+type cancelled struct {
+	handoffID string
+	cause     error
+}
+
+func (c *cancelled) Error() string {
+	return fmt.Sprintf("handoff %q did not complete: %v", c.handoffID, c.cause)
+}
+
+func (c *cancelled) Unwrap() error { return c.cause }
 
 // Step is one hop of the fixed route: the originating role and the role that
 // must respond.
@@ -100,6 +116,11 @@ func Route(ctx context.Context, options Options) (Outcome, error) {
 	if err != nil {
 		return Outcome{}, err
 	}
+	// A run cancelled before it starts spends nothing, so its identity stays
+	// available for a later attempt.
+	if err := ctx.Err(); err != nil {
+		return Outcome{}, fmt.Errorf("workflow %q cancelled before it started: %w", options.WorkflowID, err)
+	}
 
 	route, err := claim(options)
 	if err != nil {
@@ -159,6 +180,9 @@ func (route *routing) run(ctx context.Context) error {
 			return err
 		}
 		route.handoffID = request.ID
+		if err := ctx.Err(); err != nil {
+			return &cancelled{handoffID: request.ID, cause: err}
+		}
 
 		if err := route.emit("handoff.started", "Handoff started.", request.ID); err != nil {
 			return err
@@ -169,6 +193,11 @@ func (route *routing) run(ctx context.Context) error {
 
 		result, err := route.options.Runner.Execute(ctx, request)
 		if err != nil {
+			// A killed process reports its signal, not the cancellation, so the
+			// context decides what stopped the run.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return &cancelled{handoffID: request.ID, cause: ctxErr}
+			}
 			return fmt.Errorf("execute handoff %q: %w", request.ID, err)
 		}
 		if err := handoff.ValidateResultFor(request, result); err != nil {
@@ -221,8 +250,15 @@ func (route *routing) settle(runErr error) (Outcome, error) {
 		// reported, the workflow did not finish.
 		route.outcome.Status = handoff.StatusFailed
 		if !route.diagnosed {
-			if err := route.diagnose(failedWorkflowCode, "Workflow failed before it completed.", runErr.Error()); err != nil {
-				runErr = errors.Join(runErr, err)
+			var stop *cancelled
+			var diagnoseErr error
+			if errors.As(runErr, &stop) {
+				diagnoseErr = route.diagnoseWithSeverity(cancelledWorkflowCode, eventstream.SeverityWarning, "Workflow was cancelled before it completed.", runErr.Error())
+			} else {
+				diagnoseErr = route.diagnose(failedWorkflowCode, "Workflow failed before it completed.", runErr.Error())
+			}
+			if diagnoseErr != nil {
+				runErr = errors.Join(runErr, diagnoseErr)
 			}
 		}
 	}
@@ -246,12 +282,16 @@ func (route *routing) emit(name, message, handoffID string) error {
 // diagnose records why the run stopped. The failing handoff is named in the
 // detail because a record carries either an event or a diagnostic, never both.
 func (route *routing) diagnose(code, message, detail string) error {
+	return route.diagnoseWithSeverity(code, eventstream.SeverityError, message, detail)
+}
+
+func (route *routing) diagnoseWithSeverity(code string, severity eventstream.Severity, message, detail string) error {
 	entry := route.base("", "", "")
 	entry.Kind = eventstream.KindDiagnostic
 	entry.Event = nil
 	entry.Diagnostic = &eventstream.Diagnostic{
 		Code:     code,
-		Severity: eventstream.SeverityError,
+		Severity: severity,
 		Message:  message,
 		Detail:   detail,
 	}
