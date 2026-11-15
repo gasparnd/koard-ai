@@ -15,10 +15,14 @@ Objective: give the proposal produced by the executor a deterministic, content-d
 
 ## Tasks
 
-- [ ] T1 — S1-S6, S8 — route: inline (no writer trigger; one coherent behavior) — risk: item 3 (a new identity contract later work will consume) — commit: pending.
+- [x] T1 — S1-S6, S8 — route: inline (no writer trigger; one coherent behavior) — risk: item 3 (a new identity contract later work will consume) — commit: `ebed9af`.
 
 ## Log
 
 - L1 (2026-11-15): "vamos con la identidad", continuing `docs/roadmap.md` after the agent router work units closed.
 - L2 (2026-11-15): Repo inspection found no existing candidate code; only references in docs and handoff fixtures.
 - L3 (2026-11-15): `handoff.Result.Validate` already requires a non-empty summary, so an "empty proposal" branch would be dead code and is not implemented.
+- L4 (2026-11-15): RED observed with undefined `Produce` and `IDPrefix`, then GREEN in `internal/core/candidate/candidate.go`.
+- L5 (2026-11-15): Router wiring records the candidate only when the executor hop completes, so a blocked executor keeps its blocked outcome instead of turning into an error.
+- L6 (2026-11-15): Verification: focused package tests, full suite with `-count=1`, `go vet ./...`, and `gofmt -l` all clean. Committed as `ebed9af`.
+- L7 (2026-11-15): A stray `.gitignore` change adding `.atl/` appeared during the work unit; it was reverted to keep the commit scoped, and `.atl/` stays untracked.
