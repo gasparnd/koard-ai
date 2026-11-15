@@ -18,25 +18,41 @@ Koard grows through executable vertical slices. Planned functionality is documen
 - [x] Versioned ODD workflow state machine with blocking, resumption, and terminal states.
 - [x] Versioned JSON Lines contract for structured events and diagnostics.
 
-## Receipt-driven development
+## Governed orchestration
 
-RDD begins only after provider-independent handoff contracts exist. It must provide review evidence without taking delivery authority away from the user.
+Koard will build one real but non-mutating orchestration path before RDD. RDD will then govern the concrete candidate produced by that path before any workspace mutation is enabled.
+
+### 1. Non-mutating walking skeleton
+
+- [ ] OpenCode proposal-only runtime adapter.
+- [ ] Agent Router v1 with a fixed planner → executor → verifier route.
+- [ ] Persist typed handoffs and structured events for one workflow.
+- [ ] Produce a candidate proposal with a deterministic identity.
+- [ ] Enforce a hard stop before workspace mutation, commit, push, pull request, merge, or release.
+- [ ] Verify replay, idempotency, cancellation, crash recovery, and stale-candidate rejection.
+
+### 2. Receipt-driven development
 
 - [ ] User-owned `enable`, `disable`, and `status` review mode.
-- [ ] Candidate risk assessment with passive, medium, and high tiers.
 - [ ] Immutable candidate snapshot and identity binding.
-- [ ] Explicit per-candidate consent before model-based review.
+- [ ] Candidate risk assessment with passive, medium, and high tiers.
+- [ ] Explicit consent bound to the exact candidate snapshot.
 - [ ] Independent review with a bounded correction lifecycle.
 - [ ] Verifiable receipt tied to the reviewed candidate.
+- [ ] Verify snapshot integrity, reviewer independence, consent binding, and correction limits.
+
+### 3. Controlled mutation
+
+- [ ] Apply only the exact candidate snapshot that completed the required RDD path.
+- [ ] Handle partial writes, interruption, and recovery deterministically.
 - [ ] Keep commit, push, pull request, merge, and release outside receipt authority.
 
-## First working orchestration
+### 4. Orchestration expansion
 
-- [ ] OpenCode runtime adapter.
 - [ ] Codex runtime adapter.
-- [ ] Planner, executor, and verifier role routing.
-- [ ] Engram memory adapter.
-- [ ] End-to-end workflow with persisted handoffs.
+- [ ] Generalized Agent Router policies beyond the fixed route.
+- [ ] Engram memory adapter based on observed persistence requirements.
+- [ ] End-to-end multi-runtime workflow with persisted handoffs and receipts.
 
 ## Portable skills
 
