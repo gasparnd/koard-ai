@@ -24,7 +24,7 @@ Koard will build one real but non-mutating orchestration path before RDD. RDD wi
 
 ### 1. Non-mutating walking skeleton
 
-- [ ] OpenCode proposal-only runtime adapter.
+- [x] OpenCode proposal-only runtime adapter.
 - [ ] Agent Router v1 with a fixed planner → executor → verifier route.
 - [ ] Persist typed handoffs and structured events for one workflow.
 - [ ] Produce a candidate proposal with a deterministic identity.
