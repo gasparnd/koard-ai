@@ -44,24 +44,26 @@ func reviewConsent(args []string, cwd string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	mode, err := reviewmode.Read(locations)
-	if err != nil {
-		return err
-	}
-	if mode.Effective == reviewmode.Off {
-		return fmt.Errorf("review mode is off (decided by %s); enable it before recording consent", mode.DecidedBy)
-	}
+	return withReviewMutationLock(func() error {
+		mode, err := reviewmode.Read(locations)
+		if err != nil {
+			return err
+		}
+		if mode.Effective == reviewmode.Off {
+			return fmt.Errorf("review mode is off (decided by %s); enable it before recording consent", mode.DecidedBy)
+		}
 
-	decision := consent.Granted
-	if action == "decline" {
-		decision = consent.Declined
-	}
-	record, err := consent.Decide(runDir, decision)
-	if err != nil {
-		return err
-	}
-	printConsentStatus(stdout, record.Target, &record)
-	return nil
+		decision := consent.Granted
+		if action == "decline" {
+			decision = consent.Declined
+		}
+		record, err := consent.Decide(runDir, decision)
+		if err != nil {
+			return err
+		}
+		printConsentStatus(stdout, record.Target, &record)
+		return nil
+	})
 }
 
 func parseWorkflowFlag(args []string) (string, error) {

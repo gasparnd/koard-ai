@@ -117,7 +117,7 @@ The boundary covers what no code path performs yet. Nothing in Koard commits, pu
 
 One versioned `consent.json` file under the workflow run directory records `granted` or `declined` with the authority `review`. Publication is atomic and never replaces an existing record. Repeating the same decision is idempotent; a conflicting decision or target mismatch fails closed. A decline affects only that candidate snapshot. A grant permits only independent review of those exact stored bytes: correction, workspace mutation, commit, push, pull request, merge, and release remain unauthorized.
 
-The CLI resolves the target by workflow identity through `koard review consent <status|grant|decline> --workflow <id>`. `status` never writes. Grant and decline require review mode to be on. See `consent.md`.
+The CLI resolves the target by workflow identity through `koard review consent <status|grant|decline> --workflow <id>`. `status` never writes. Grant and decline require review mode to be on. Review-mode writes and consent decisions share one global cross-process lock, so disabling review mode cannot complete between the consent check and publication. A stale lock fails closed instead of guessing that no operation is active. See `consent.md`.
 
 ## Runtime adapters
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role.

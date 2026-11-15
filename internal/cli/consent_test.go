@@ -171,6 +171,21 @@ func TestReviewConsentModeOffBlocksDecisionsButNotStatus(t *testing.T) {
 	}
 }
 
+func TestReviewConsentFailsClosedWhileReviewStateIsLocked(t *testing.T) {
+	fixture := newConsentCLIFixture(t)
+	lock := filepath.Join(fixture.configDir, reviewMutationLock)
+	if err := os.Mkdir(lock, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := fixture.run(t, "grant")
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "operation is in progress") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(fixture.runDir, consent.FileName)); !os.IsNotExist(err) {
+		t.Fatalf("locked operation wrote consent: %v", err)
+	}
+}
+
 func TestReviewConsentRejectsMissingWorkflowAndUsageErrors(t *testing.T) {
 	fixture := newConsentCLIFixture(t)
 	for _, args := range [][]string{
@@ -291,5 +306,8 @@ func TestHelpListsReviewConsent(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "review consent") {
 		t.Fatalf("help does not list review consent: %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "  review mode <status|enable|disable>") || strings.Contains(stdout.String(), "\treview mode") {
+		t.Fatalf("help changed the existing review-mode indentation: %q", stdout.String())
 	}
 }

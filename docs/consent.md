@@ -24,6 +24,8 @@ Review consent: granted
 
 `status` only reads and reports `unset`, `granted`, or `declined`. Grant and decline require the effective [review mode](review-mode.md) to be on.
 
+Review-mode writes and consent decisions are serialized through a lock in the global Koard configuration directory. Concurrent operations fail closed; this prevents review mode from being disabled between the consent check and publication. If a process terminates while holding the lock, remove `.review-mutation.lock` only after confirming no Koard review operation is still running.
+
 ## Binding and persistence
 
 The run directory stores one versioned `consent.json` record containing:
