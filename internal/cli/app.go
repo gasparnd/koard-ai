@@ -129,8 +129,10 @@ Usage:
 Commands:
   init       Create the project-level Koard structure
   doctor     Check the local Koard configuration
-  review mode <status|enable|disable> [--scope clone|global]
-             Show or set the user-owned review mode
+	  review mode <status|enable|disable> [--scope clone|global]
+	             Show or set the user-owned review mode
+	  review consent <status|grant|decline> --workflow <id>
+	             Show or record review consent for one candidate snapshot
   version    Print the CLI version
   help       Show this help`)
 }

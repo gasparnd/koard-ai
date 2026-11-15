@@ -110,15 +110,39 @@ func TestStatusRejectsUnboundOrUnverifiableWorkflow(t *testing.T) {
 		mutate func(t *testing.T, runDir string, outcome *agentrouter.Outcome)
 		want   string
 	}{
+		{"workflow schema", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
+			outcome.SchemaVersion = 2
+		}, "workflow schema_version"},
 		{"workflow identity", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
 			outcome.WorkflowID = "another-workflow"
 		}, "does not match run directory"},
+		{"workflow status", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
+			outcome.Status = handoff.StatusBlocked
+		}, "is not completed"},
 		{"missing candidate", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
 			outcome.Candidate = nil
 		}, "has no candidate"},
+		{"candidate schema", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
+			outcome.Candidate.SchemaVersion = 2
+		}, "candidate schema_version"},
+		{"candidate identity", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
+			outcome.Candidate.ID = "not-a-digest"
+		}, "candidate_id"},
+		{"candidate provenance", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
+			outcome.Candidate.TaskID = "another-task"
+		}, "provenance"},
+		{"missing risk", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
+			outcome.Risk = nil
+		}, "has no risk assessment"},
+		{"risk schema", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
+			outcome.Risk.SchemaVersion = 2
+		}, "risk schema_version"},
 		{"risk binding", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
 			outcome.Risk.SnapshotID = "sha256:" + strings.Repeat("f", 64)
 		}, "risk snapshot_id"},
+		{"risk tier", func(t *testing.T, _ string, outcome *agentrouter.Outcome) {
+			outcome.Risk.Tier = "unknown"
+		}, "risk tier"},
 		{"snapshot candidate binding", func(t *testing.T, runDir string, outcome *agentrouter.Outcome) {
 			manifestPath := filepath.Join(runDir, "snapshot", "manifest.json")
 			encoded, err := os.ReadFile(manifestPath)
@@ -141,6 +165,32 @@ func TestStatusRejectsUnboundOrUnverifiableWorkflow(t *testing.T) {
 			outcome := readOutcome(t, runDir)
 			test.mutate(t, runDir, &outcome)
 			writeOutcome(t, runDir, outcome)
+			if _, _, err := Status(runDir); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("expected %q error, got %v", test.want, err)
+			}
+		})
+	}
+}
+
+func TestStatusStrictlyDecodesWorkflowRecord(t *testing.T) {
+	runDir, _ := consentFixture(t)
+	path := filepath.Join(runDir, "workflow.json")
+	encoded, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{"unknown field", strings.TrimSuffix(string(encoded), "}") + `,"extra":true}`, "unknown field"},
+		{"trailing value", string(encoded) + `{}`, "multiple JSON values"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := os.WriteFile(path, []byte(test.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
 			if _, _, err := Status(runDir); err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("expected %q error, got %v", test.want, err)
 			}

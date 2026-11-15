@@ -28,6 +28,7 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 |---|---|
 | `architecture.md` | Components, contracts, and dependency direction |
 | `configuration.md` | Current configuration schema and validation rules |
+| `consent.md` | Candidate-bound consent for independent review |
 | `contributing.md` | Development workflow and checks |
 | `events.md` | Structured workflow events and diagnostics |
 | `handoffs.md` | Versioned request and result contracts between roles |

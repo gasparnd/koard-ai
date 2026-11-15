@@ -6,7 +6,7 @@ Koard defines its own provider-neutral contracts, safety boundaries, and roadmap
 
 ## Current status
 
-Koard is building its first governed orchestration slice. The current CLI can initialize a project and strictly validate its versioned configuration. The core defines provider-neutral handoffs, a versioned ODD state machine, and a strict JSON Lines contract for workflow events and diagnostics. A fixed planner → executor → verifier router executes one workflow and persists its handoffs and events under `.koard/state/runs/`. A completed executor result becomes a candidate whose identity is the SHA-256 digest of the proposal content, and the bytes of its `repo://` artifacts are captured as an immutable, verifiable snapshot that is assessed into a passive, medium, or high risk tier. An internal OpenCode adapter executes each proposal-only handoff with read-only capabilities and strict result binding, and every routed handoff is refused if it asks for any capability beyond `repository:read`. `koard review mode` lets the user turn receipt-driven development on or off per clone or globally, with off winning; nothing consumes the mode yet. Review, consent, controlled mutation, Engram integration, and skill generation are still planned.
+Koard is building its first governed orchestration slice. The current CLI can initialize a project and strictly validate its versioned configuration. The core defines provider-neutral handoffs, a versioned ODD state machine, and a strict JSON Lines contract for workflow events and diagnostics. A fixed planner → executor → verifier router executes one workflow and persists its handoffs and events under `.koard/state/runs/`. A completed executor result becomes a candidate whose identity is the SHA-256 digest of the proposal content, and the bytes of its `repo://` artifacts are captured as an immutable, verifiable snapshot that is assessed into a passive, medium, or high risk tier. An internal OpenCode adapter executes each proposal-only handoff with read-only capabilities and strict result binding, and every routed handoff is refused if it asks for any capability beyond `repository:read`. `koard review mode` lets the user turn receipt-driven development on or off per clone or globally, with off winning. `koard review consent` records an immutable grant or decline for independent review of one exact workflow candidate snapshot; it never authorizes mutation or delivery. Independent review, receipts, controlled mutation, Engram integration, and skill generation are still planned.
 
 ## Quick start
 
@@ -16,9 +16,11 @@ Requirements: Go 1.23 or newer.
 go test ./...
 go run ./cmd/koard init
 go run ./cmd/koard doctor
+go run ./cmd/koard review mode status
+go run ./cmd/koard review consent status --workflow <id>
 ```
 
-`doctor` rejects unsupported schema versions, unknown fields, missing required values, and multiple YAML documents. See [docs/configuration.md](docs/configuration.md) for the current schema.
+`doctor` rejects unsupported schema versions, unknown fields, missing required values, and multiple YAML documents. See [docs/configuration.md](docs/configuration.md) for the current schema and [docs/consent.md](docs/consent.md) for candidate-bound review consent.
 
 ## Documentation
 

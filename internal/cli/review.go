@@ -14,7 +14,8 @@ import (
 // configDirEnv overrides the directory that holds the global review mode.
 const configDirEnv = "KOARD_CONFIG_DIR"
 
-const reviewUsage = "usage: koard review mode <status|enable|disable> [--scope clone|global]"
+const reviewUsage = `usage: koard review mode <status|enable|disable> [--scope clone|global]
+       koard review consent <status|grant|decline> --workflow <id>`
 
 // usageError marks a malformed command line, which exits with code 2.
 type usageError struct{ message string }
@@ -35,14 +36,25 @@ func runReview(args []string, cwd string, stdout, stderr io.Writer) int {
 }
 
 func review(args []string, cwd string, stdout io.Writer) error {
-	if len(args) == 0 || args[0] != "mode" {
-		return usageError{"expected the 'mode' subcommand"}
+	if len(args) == 0 {
+		return usageError{"expected the 'mode' or 'consent' subcommand"}
 	}
-	if len(args) == 1 {
+	switch args[0] {
+	case "mode":
+		return reviewMode(args[1:], cwd, stdout)
+	case "consent":
+		return reviewConsent(args[1:], cwd, stdout)
+	default:
+		return usageError{fmt.Sprintf("unknown review subcommand %q", args[0])}
+	}
+}
+
+func reviewMode(args []string, cwd string, stdout io.Writer) error {
+	if len(args) == 0 {
 		return usageError{"expected status, enable, or disable"}
 	}
 
-	action, flags := args[1], args[2:]
+	action, flags := args[0], args[1:]
 	switch action {
 	case "status":
 		if len(flags) != 0 {

@@ -2,7 +2,7 @@
 
 Review mode is the user's switch for receipt-driven development (RDD). It decides whether RDD applies. It does not grant consent for any candidate and never authorizes delivery.
 
-Nothing consumes the mode yet. RDD itself is planned work in `roadmap.md`; this switch exists first so the decision belongs to the user before any review runs.
+Candidate-bound consent consumes the effective mode: new grant and decline decisions are refused while review mode is off. Consent status remains readable. Independent review and later RDD stages remain planned in `roadmap.md`.
 
 ## Commands
 
