@@ -1,0 +1,20 @@
+schema_version: 1
+project:
+  name: koard
+
+workflow:
+  default: odd
+
+memory:
+  provider: engram
+
+agents:
+  planner:
+    provider: unset
+    model: unset
+  executor:
+    provider: unset
+    model: unset
+  verifier:
+    provider: unset
+    model: unset
