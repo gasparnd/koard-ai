@@ -34,7 +34,13 @@ Agents do not receive authority by sending conversational messages to one anothe
 - verification evidence;
 - terminal status and follow-up transition.
 
-The first protocol version will be persisted as JSON so that humans and different runtimes can inspect the same artifact.
+The first protocol version is persisted as strict JSON so that humans and different runtimes can inspect the same artifact. Requests state bounded work; results bind back to the exact handoff identity and responding role. A result may recommend a next role, but only the orchestrator may authorize the next transition. See `handoffs.md` for the current contract.
+
+## Workflow state
+
+The provider-neutral state machine in `internal/core/odd` owns legal ODD transitions. It is a pure value: applying an accepted event returns the next revision, while an invalid event leaves the previous snapshot unchanged. Active work can be blocked and resumed at the exact previous state; completed and stopped workflows are terminal. See `odd.md` for the transition table.
+
+The state machine does not execute models, write event logs, or authorize delivery. Those responsibilities remain outside the transition core.
 
 ## Project layout
 

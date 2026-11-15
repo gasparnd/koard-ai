@@ -29,6 +29,8 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | `architecture.md` | Components, contracts, and dependency direction |
 | `configuration.md` | Current configuration schema and validation rules |
 | `contributing.md` | Development workflow and checks |
+| `handoffs.md` | Versioned request and result contracts between roles |
+| `odd.md` | ODD states, transitions, and interruption behavior |
 | `roadmap.md` | Current state and incremental milestones |
 | `self-hosting.md` | How Koard will understand and improve itself |
 | `skill-style-guide.md` | Contract for project-level skills |
