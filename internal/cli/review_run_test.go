@@ -12,6 +12,7 @@ import (
 	"github.com/koard-ai/koard/internal/core/agentrouter"
 	"github.com/koard-ai/koard/internal/core/handoff"
 	reviewcore "github.com/koard-ai/koard/internal/core/review"
+	"github.com/koard-ai/koard/internal/core/risk"
 )
 
 type fakeReviewer func(context.Context, reviewcore.Request, string) (reviewcore.Result, error)
@@ -97,15 +98,30 @@ func TestReviewRunApprovesAfterGrantedConsent(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run exited with %d: %s", code, stderr)
 	}
-	for _, expected := range []string{"Review state: approved", "attempt: 1", "verdict: approved", "corrections used: 0/1", "mutation and delivery: not authorized"} {
+	for _, expected := range []string{"Review state: approved", "attempt: 1", "verdict: approved", "corrections used: 0/1", "receipt: sha256:", "mutation and delivery: not authorized"} {
 		if !strings.Contains(stdout, expected) {
 			t.Fatalf("run output missing %q: %q", expected, stdout)
 		}
 	}
 
 	statusCode, statusOut, statusErr := fixture.runCmd(t, "status", "--workflow", fixture.workflowID)
-	if statusCode != 0 || !strings.Contains(statusOut, "Review state: approved") {
+	if statusCode != 0 || !strings.Contains(statusOut, "Review state: approved") || !strings.Contains(statusOut, "receipt: sha256:") {
 		t.Fatalf("status code=%d stdout=%q stderr=%q", statusCode, statusOut, statusErr)
+	}
+}
+
+func TestReviewStatusOmitsReceiptForNonApprovedStates(t *testing.T) {
+	fixture := newConsentCLIFixture(t)
+	if code, _, stderr := fixture.run(t, "grant"); code != 0 {
+		t.Fatalf("grant consent: %s", stderr)
+	}
+	stubReviewProviders(t, fakeReviewer(func(_ context.Context, request reviewcore.Request, _ string) (reviewcore.Result, error) {
+		return pausingFakeReviewer(request)
+	}), nil)
+
+	code, stdout, stderr := fixture.runCmd(t, "run", "--workflow", fixture.workflowID)
+	if code != 0 || !strings.Contains(stdout, "correction_required") || strings.Contains(stdout, "receipt:") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 
@@ -227,6 +243,30 @@ func TestReviewCorrectionDeclineSettlesRejectedWithoutRunningAProvider(t *testin
 	}
 	if correctorCalls != 0 {
 		t.Fatal("corrector ran after correction was declined")
+	}
+}
+
+func TestReviewStatusRejectsAStaleCandidateAfterApproval(t *testing.T) {
+	fixture := newConsentCLIFixture(t)
+	if code, _, stderr := fixture.run(t, "grant"); code != 0 {
+		t.Fatalf("grant consent: %s", stderr)
+	}
+	stubReviewProviders(t, approvingFakeReviewer(t, 1), nil)
+	if code, _, stderr := fixture.runCmd(t, "run", "--workflow", fixture.workflowID); code != 0 {
+		t.Fatalf("run: %s", stderr)
+	}
+
+	outcome := fixture.readOutcome(t)
+	if outcome.Risk.Tier == risk.High {
+		outcome.Risk.Tier = risk.Medium
+	} else {
+		outcome.Risk.Tier = risk.High
+	}
+	fixture.writeOutcome(t, outcome)
+
+	code, stdout, stderr := fixture.runCmd(t, "status", "--workflow", fixture.workflowID)
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "stale") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 

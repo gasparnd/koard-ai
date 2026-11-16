@@ -225,6 +225,11 @@ func RunInitial(ctx context.Context, options Options) (Lifecycle, error) {
 		record.State = StateCorrectionRequired
 		record.CorrectionRequestID = correction.ID
 	}
+	if record.State == StateApproved {
+		if err := issueReceipt(reviewDir, record); err != nil {
+			return settleFailure(reviewDir, record, fmt.Errorf("issue receipt: %w", err))
+		}
+	}
 	if err := writeCurrent(reviewDir, record); err != nil {
 		return record, err
 	}
@@ -479,6 +484,11 @@ func RunCorrection(ctx context.Context, options Options) (Lifecycle, error) {
 		// The correction budget is now exhausted: a second pause would permit
 		// an unbounded loop, so this terminates instead (S4).
 		record.State = StateEscalated
+	}
+	if record.State == StateApproved {
+		if err := issueReceipt(reviewDir, record); err != nil {
+			return settleFailure(reviewDir, record, fmt.Errorf("issue receipt: %w", err))
+		}
 	}
 	if err := writeCurrent(reviewDir, record); err != nil {
 		return record, err

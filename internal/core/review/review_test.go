@@ -605,6 +605,56 @@ func TestRunCorrectionEscalatesOnSecondCorrectionRequired(t *testing.T) {
 	}
 }
 
+func escalatedFixture(t *testing.T) string {
+	t.Helper()
+	runDir, _ := pausedFixture(t)
+	if _, err := DecideCorrection(runDir, consent.Granted); err != nil {
+		t.Fatal(err)
+	}
+	workspace := workspaceFor(runDir)
+	corrector := correctingProposal(workspace)
+	reviewer := reviewerFunc(func(_ context.Context, request Request, _ string) (Result, error) {
+		result := boundResult(request, VerdictCorrectionRequired)
+		result.Findings = []Finding{{ID: "F2", Severity: SeverityBlocking, Summary: "Still broken", Evidence: []Evidence{{URI: "repo://change.go", Digest: request.Snapshot.Entries[0].Digest}}}}
+		return result, nil
+	})
+	if _, err := RunCorrection(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On), Workspace: workspace, Corrector: corrector}); err != nil {
+		t.Fatal(err)
+	}
+	return runDir
+}
+
+// TestRunCorrectionRefusesAThirdAttemptAfterEscalation proves the correction
+// budget is a hard ceiling, not just a counter that happens to stay at 1 in
+// the happy path: once escalated, the lifecycle is no longer paused for
+// correction, so a further RunCorrection call is refused before any provider
+// runs, no matter what a caller supplies.
+func TestRunCorrectionRefusesAThirdAttemptAfterEscalation(t *testing.T) {
+	runDir := escalatedFixture(t)
+	var correctorCalls, reviewerCalls atomic.Int32
+	corrector := correctorFunc(func(context.Context, handoff.Request) (handoff.Result, error) {
+		correctorCalls.Add(1)
+		return handoff.Result{}, nil
+	})
+	reviewer := reviewerFunc(func(context.Context, Request, string) (Result, error) {
+		reviewerCalls.Add(1)
+		return Result{}, nil
+	})
+	if _, err := RunCorrection(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On), Workspace: workspaceFor(runDir), Corrector: corrector}); err == nil || !strings.Contains(err.Error(), "paused for correction") {
+		t.Fatalf("expected a paused-lifecycle error, got %v", err)
+	}
+	if correctorCalls.Load() != 0 || reviewerCalls.Load() != 0 {
+		t.Fatal("a third attempt invoked a provider after escalation")
+	}
+}
+
+func TestDecideCorrectionRefusesAfterEscalation(t *testing.T) {
+	runDir := escalatedFixture(t)
+	if _, err := DecideCorrection(runDir, consent.Granted); err == nil || !strings.Contains(err.Error(), "paused for correction") {
+		t.Fatalf("expected a paused-lifecycle error, got %v", err)
+	}
+}
+
 func boundResult(request Request, verdict Verdict) Result {
 	return Result{SchemaVersion: CurrentSchemaVersion, RequestID: request.ID, Target: request.Target, Attempt: request.Attempt, Verdict: verdict}
 }

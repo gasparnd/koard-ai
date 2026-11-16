@@ -22,6 +22,20 @@ Keeping these questions separate prevents one broad permission from silently bec
 | Provider adapter | Runs a fresh reviewer (and, for a correction, a corrector) with read-only capabilities over a materialized snapshot | Core contracts stay portable across runtimes; the live workspace is never what gets inspected |
 | Correction consent | Separately authorizes one proposal-only correction | Review permission never silently becomes correction permission |
 | CLI | Exposes `run`, `status`, `correction` over the exact run directory | The only way a human or script touches this lifecycle |
+| Receipt | Immutable, digest-verifiable proof that a lifecycle reached `approved` | A future layer never has to replay history to answer "was this reviewed?" |
+
+## Verification matrix
+
+The roadmap asks to "verify snapshot integrity, reviewer independence, consent binding, and correction limits." All four already exist as concrete checks spread across this layer and `receipt.md`; this table is the map so nobody has to rediscover them:
+
+| Property | Where it is actually checked | What a gap would look like |
+|---|---|---|
+| Snapshot integrity | `snapshot.Load`/`ReadEntry` re-verify every blob's digest on every read; `ReceiptStatus` calls `Load` on the exact target snapshot (the original for attempt 1, `review/correction-snapshot/` for attempt 2) | A corrupted blob would be accepted silently — tested by `TestRunInitialRejectsCorruptSnapshotBeforeClaim`, `TestReceiptStatusDetectsCorruptedSnapshot`, `TestReceiptStatusDetectsCorruptedCorrectionSnapshot` |
+| Reviewer independence | `handoff`/`review.Result` have no `reviewer` field at all — the model cannot report its own identity; `ReviewerIdentity` only ever comes from trusted `Options`; every OpenCode invocation is `--standalone --archived` with no continuation flag | A provider claiming its own identity, or two attempts silently sharing one session, would be accepted — tested by `TestAdapterBuildsProposalOnlyInvocation` and `TestAdapterReviewMaterializesSnapshotReturnsBoundResultAndCleansUp`'s forbidden-flag assertions |
+| Consent binding | `consent.Status` fails closed whenever the live `workflow.json` no longer matches a granted decision; `RunInitial` requires exactly that before claiming; `ReceiptStatus` re-runs the same check for attempt 1 (see "Staleness" in `receipt.md`) | An approved receipt surviving a workflow record that no longer matches it — tested by the consent suite and `TestReceiptStatusRejectsAStaleCandidateWhenTheWorkflowRecordDrifts` |
+| Correction limits | `MaxCorrections = 1`; `validateLifecycle` bounds `Attempt` to `1..MaxCorrections+1`; a second `correction_required` escalates instead of pausing; both `RunCorrection` and `DecideCorrection` refuse once the lifecycle is no longer `correction_required` | A third attempt running, or a second correction decision being recorded, after escalation — tested by `TestRunCorrectionEscalatesOnSecondCorrectionRequired`, `TestRunCorrectionRefusesAThirdAttemptAfterEscalation`, `TestDecideCorrectionRefusesAfterEscalation` |
+
+Nothing new was built for this: every row already existed as a consequence of the review and receipt lifecycle's own fail-closed design. The work was confirming each property has a direct, named test, and closing the three that did not (correction-snapshot integrity, the review path's forbidden-flag assertion, and refusal after escalation).
 
 ## Initial review path
 
@@ -51,6 +65,10 @@ A paused, `correction_required` lifecycle stays paused until a **separate** immu
 7. That revised target is independently re-reviewed as attempt 2, with its own immutable `2-request.json` / `2-result.json`, exactly like the first attempt.
 8. Approved or rejected settles the lifecycle. A second `correction_required` verdict **escalates** instead of pausing again — `MaxCorrections` permits exactly one, so no loop is possible, and no second correction-request file is ever written.
 
+## Receipt
+
+The instant — and only the instant — either path above settles `approved`, it issues one immutable, digest-verifiable receipt bound to that exact candidate and verdict. See `receipt.md` for its content, verification, and why it carries no cryptographic signature.
+
 ## Persisted evidence
 
 ```text
@@ -60,6 +78,7 @@ A paused, `correction_required` lifecycle stays paused until a **separate** immu
 ├── snapshot/
 └── review/
     ├── review.json
+    ├── receipt.json                  # only once the lifecycle settles approved
     ├── correction-request.json       # only when correction is requested
     ├── correction-decision.json      # only once a separate decision is recorded
     ├── correction-snapshot/          # only once a granted correction proposes a revision

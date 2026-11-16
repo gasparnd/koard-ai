@@ -223,11 +223,13 @@ func TestAdapterReviewMaterializesSnapshotReturnsBoundResultAndCleansUp(t *testi
 	var sawDir string
 	var sawPrompt string
 	var sawPolicy string
+	var sawArgs []string
 	runner := &fakeRunner{run: func(_ context.Context, cmd command) commandResult {
 		if len(cmd.Args) == 1 && cmd.Args[0] == "--version" {
 			return commandResult{stdout: []byte("opencode v2.2.6\n")}
 		}
 		sawDir = cmd.Dir
+		sawArgs = cmd.Args
 		sawPrompt = cmd.Args[len(cmd.Args)-1]
 		sawPolicy = envValue(cmd.Env, "OPENCODE_CONFIG_CONTENT")
 		content, err := os.ReadFile(filepath.Join(cmd.Dir, "change.go"))
@@ -264,6 +266,22 @@ func TestAdapterReviewMaterializesSnapshotReturnsBoundResultAndCleansUp(t *testi
 	} {
 		if !strings.Contains(sawPolicy, expected) {
 			t.Errorf("review policy is missing %q: %s", expected, sawPolicy)
+		}
+	}
+
+	// Reviewer independence: every attempt is a standalone, archived,
+	// non-continued run, the same guarantee TestAdapterBuildsProposalOnlyInvocation
+	// pins for the executor path. Nothing here lets a provider resume a prior
+	// session or otherwise carry state between review attempts.
+	joined := strings.Join(sawArgs, " ")
+	for _, expected := range []string{"run", "--standalone", "--archived"} {
+		if !strings.Contains(joined, expected) {
+			t.Errorf("expected review invocation to contain %q: %q", expected, joined)
+		}
+	}
+	for _, forbidden := range []string{"--auto", "--worktree", "--continue", "--session"} {
+		if strings.Contains(joined, forbidden) {
+			t.Errorf("review invocation contains forbidden flag %q: %q", forbidden, joined)
 		}
 	}
 }

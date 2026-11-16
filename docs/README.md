@@ -34,6 +34,7 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | `independent-review.md` | Layer-by-layer guide to exact, read-only candidate review |
 | `handoffs.md` | Versioned request and result contracts between roles |
 | `odd.md` | ODD states, transitions, and interruption behavior |
+| `receipt.md` | Immutable, digest-verifiable proof that a candidate completed review |
 | `review-mode.md` | User-owned switch for receipt-driven development |
 | `roadmap.md` | Current state and incremental milestones |
 | `self-hosting.md` | How Koard will understand and improve itself |
