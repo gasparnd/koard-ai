@@ -76,6 +76,7 @@ type Options struct {
 	WorkflowID string
 	TaskID     string
 	Objective  string
+	Policy     string
 	StateDir   string
 	// Workspace is the repository the responders inspect. The candidate
 	// snapshot reads its repo:// artifacts from here and never writes to it.
@@ -92,6 +93,7 @@ type Outcome struct {
 	SchemaVersion int                  `json:"schema_version"`
 	WorkflowID    string               `json:"workflow_id"`
 	TaskID        string               `json:"task_id"`
+	Policy        string               `json:"policy,omitempty"`
 	Status        handoff.Status       `json:"status"`
 	Candidate     *candidate.Candidate `json:"candidate,omitempty"`
 	// Risk is the tier of the candidate snapshot, present only with a
@@ -119,7 +121,7 @@ type routing struct {
 	diagnosed bool
 }
 
-// Route executes the fixed route and persists every handoff and event. It
+// Route executes the selected policy and persists every handoff and event. It
 // never mutates the workspace and never authorizes a model-returned next
 // transition.
 func Route(ctx context.Context, options Options) (Outcome, error) {
@@ -179,13 +181,16 @@ func (route *routing) open() error {
 	return nil
 }
 
-// run executes the fixed route. It returns the first failure and leaves the
+// run executes the selected policy. It returns the first failure and leaves the
 // outcome describing how far the workflow got.
 func (route *routing) run(ctx context.Context) error {
-	objective := route.options.Objective
 	var carried []handoff.Reference
-
-	for index, step := range FixedRoute {
+	steps, err := PolicySteps(route.options.Policy)
+	if err != nil {
+		return err
+	}
+	for index, step := range steps {
+		objective := stepObjective(route.options, step, index)
 		request, err := newRequest(route.options, step, index+1, objective, carried)
 		if err != nil {
 			return err
@@ -265,10 +270,9 @@ func (route *routing) run(ctx context.Context) error {
 			route.outcome.Candidate = &produced
 			route.outcome.Risk = &assessment
 		}
-		// The next handoff must verify the artifact this one produced, so the
+		// The next handoff consumes the artifact this one produced, so the
 		// persisted result travels as a digest-bound context reference.
 		carried = resultReferences(index+1, encoded, result)
-		objective = fmt.Sprintf("Verify the result of the previous handoff for: %s", route.options.Objective)
 	}
 	return nil
 }
@@ -363,12 +367,16 @@ func newOutcome(options Options) Outcome {
 		SchemaVersion: CurrentSchemaVersion,
 		WorkflowID:    options.WorkflowID,
 		TaskID:        options.TaskID,
-		Handoffs:      make([]handoff.Request, 0, len(FixedRoute)),
-		Results:       make([]handoff.Result, 0, len(FixedRoute)),
+		Policy:        options.Policy,
+		Handoffs:      []handoff.Request{},
+		Results:       []handoff.Result{},
 	}
 }
 
 func validateOptions(options Options) (Options, error) {
+	if _, err := PolicySteps(options.Policy); err != nil {
+		return Options{}, err
+	}
 	if strings.TrimSpace(options.WorkflowID) == "" {
 		return Options{}, errors.New("workflow_id is required")
 	}

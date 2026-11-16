@@ -18,13 +18,15 @@ Agents cannot authorize delivery or another agent merely by returning a `next` v
 
 ## Roles
 
-Version `1` recognizes three roles:
+Version `1` recognizes three responding roles:
 
 | Role | Responsibility |
 |---|---|
 | `planner` | Produce a bounded plan or decision artifact |
 | `executor` | Implement the authorized objective and return evidence |
 | `verifier` | Independently evaluate the candidate and evidence |
+
+`orchestrator` is additionally accepted in request `from` only. It originates the `planned` policy's first request without inventing a prior model response. It is invalid in `to`, result `role`, and `next.role`. Existing request/result shapes remain unchanged; older builds do not understand this new sender value.
 
 ## Request contract
 
@@ -101,8 +103,8 @@ The implementation in `internal/core/handoff`:
 
 The proposal-only OpenCode and Codex adapters implement this protocol without changing its semantics. Both validate a request before invocation, permit only the `repository:read` capability, require a JSON result, and apply the same strict decoding and identity/role binding described above. They differ only in how the runtime is bounded: OpenCode through a per-tool policy, Codex through its read-only sandbox. See `codex-adapter.md`.
 
-The agent router composes this protocol into a fixed route: the planner hands off to the executor, then the executor hands off to the verifier. Each hop is an independent request/result pair with its own identity, so a result can only answer the handoff it was created for.
+The agent router composes this protocol into the `fixed` and `planned` policies. The former preserves planner → executor → verifier handoffs without running a planner; the latter first invokes the planner through an orchestrator → planner handoff. Each hop is an independent request/result pair with its own identity, so a result can only answer the handoff it was created for.
 
-The second request carries what it must verify: a `Context` reference with kind `koard.handoff.result`, a state-relative URI, and a `sha256:` digest of the persisted result bytes, followed by any artifact the responder declared. The verifier therefore inspects the exact proposal instead of a paraphrase of it.
+Every request after the first carries what it must consume: a `Context` reference with kind `koard.handoff.result`, a run-relative URI, and a `sha256:` digest of the persisted result bytes, followed by any artifact the responder declared. The executor receives the actual plan in `planned`; the verifier receives the actual proposal in either policy.
 
 The adapter does not authorize the next transition returned by a model. Agent routing records the route, and later workflow phases decide transitions.
