@@ -99,7 +99,7 @@ The implementation in `internal/core/handoff`:
 
 ## Runtime adapter boundary
 
-The proposal-only OpenCode adapter implements this protocol without changing its semantics. It validates a request before invocation, permits only the `repository:read` capability, requires a JSON result, and applies the same strict decoding and identity/role binding described above.
+The proposal-only OpenCode and Codex adapters implement this protocol without changing its semantics. Both validate a request before invocation, permit only the `repository:read` capability, require a JSON result, and apply the same strict decoding and identity/role binding described above. They differ only in how the runtime is bounded: OpenCode through a per-tool policy, Codex through its read-only sandbox. See `codex-adapter.md`.
 
 The agent router composes this protocol into a fixed route: the planner hands off to the executor, then the executor hands off to the verifier. Each hop is an independent request/result pair with its own identity, so a result can only answer the handoff it was created for.
 
