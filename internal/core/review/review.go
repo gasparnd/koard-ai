@@ -16,19 +16,24 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/koard-ai/koard/internal/core/agentrouter"
+	"github.com/koard-ai/koard/internal/core/candidate"
 	"github.com/koard-ai/koard/internal/core/consent"
+	"github.com/koard-ai/koard/internal/core/handoff"
 	"github.com/koard-ai/koard/internal/core/reviewmode"
 	"github.com/koard-ai/koard/internal/core/risk"
 	"github.com/koard-ai/koard/internal/core/snapshot"
 )
 
 const (
-	CurrentSchemaVersion = 1
-	DirectoryName        = "review"
-	AttemptsDirectory    = "attempts"
-	FileName             = "review.json"
-	CorrectionFileName   = "correction-request.json"
-	MaxCorrections       = 1
+	CurrentSchemaVersion        = 1
+	DirectoryName               = "review"
+	AttemptsDirectory           = "attempts"
+	FileName                    = "review.json"
+	CorrectionFileName          = "correction-request.json"
+	CorrectionDecisionFileName  = "correction-decision.json"
+	CorrectionSnapshotDirectory = "correction-snapshot"
+	MaxCorrections              = 1
 )
 
 var digestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -139,6 +144,12 @@ type Options struct {
 	// revocation during claim preparation or a slow provider invocation would
 	// go unnoticed.
 	ReviewMode func() (reviewmode.Mode, error)
+	// Workspace and Corrector are required only by RunCorrection. It runs
+	// Corrector as a bounded, read-only handoff over Workspace and captures
+	// whatever it proposes into a new immutable snapshot exactly like the
+	// initial candidate, then independently re-reviews that revision.
+	Workspace string
+	Corrector agentrouter.Runner
 }
 
 // RunInitial claims and executes the first independent review attempt.
@@ -218,6 +229,290 @@ func RunInitial(ctx context.Context, options Options) (Lifecycle, error) {
 		return record, err
 	}
 	return record, nil
+}
+
+// CorrectionDecision is a separate immutable decision bound to the exact
+// review target and the exact correction request it answers. It carries no
+// authority beyond "RunCorrection may spend the one permitted correction
+// attempt" — never workspace mutation or delivery.
+type CorrectionDecision struct {
+	SchemaVersion       int              `json:"schema_version"`
+	Target              consent.Target   `json:"target"`
+	CorrectionRequestID string           `json:"correction_request_id"`
+	Decision            consent.Decision `json:"decision"`
+}
+
+// DecideCorrection records one immutable decision for the exact correction
+// request a paused lifecycle is waiting on. Repeating the same decision is
+// idempotent; a conflicting decision, or deciding outside a paused lifecycle,
+// fails closed.
+func DecideCorrection(runDir string, decision consent.Decision) (CorrectionDecision, error) {
+	switch decision {
+	case consent.Granted, consent.Declined:
+	default:
+		return CorrectionDecision{}, fmt.Errorf("correction decision %q must be %q or %q", decision, consent.Granted, consent.Declined)
+	}
+	record, err := Status(runDir)
+	if err != nil {
+		return CorrectionDecision{}, fmt.Errorf("resolve review lifecycle: %w", err)
+	}
+	if record == nil || record.State != StateCorrectionRequired {
+		return CorrectionDecision{}, errors.New("correction decision requires a lifecycle paused for correction")
+	}
+	request, err := CorrectionStatus(runDir)
+	if err != nil {
+		return CorrectionDecision{}, fmt.Errorf("resolve correction request: %w", err)
+	}
+	if request == nil || request.ID != record.CorrectionRequestID {
+		return CorrectionDecision{}, errors.New("correction request is missing or does not match the paused lifecycle")
+	}
+
+	proposed := CorrectionDecision{SchemaVersion: CurrentSchemaVersion, Target: record.Target, CorrectionRequestID: request.ID, Decision: decision}
+	path := filepath.Join(runDir, DirectoryName, CorrectionDecisionFileName)
+	if err := writeOnce(path, proposed); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return CorrectionDecision{}, err
+		}
+		existing, readErr := CorrectionDecisionStatus(runDir)
+		if readErr != nil {
+			return CorrectionDecision{}, readErr
+		}
+		if existing == nil {
+			return CorrectionDecision{}, errors.New("correction decision disappeared during publication")
+		}
+		if existing.Target != proposed.Target || existing.CorrectionRequestID != proposed.CorrectionRequestID {
+			return CorrectionDecision{}, errors.New("correction decision target does not match the current correction request")
+		}
+		if existing.Decision != decision {
+			return CorrectionDecision{}, fmt.Errorf("correction decision already records %q for this correction request", existing.Decision)
+		}
+		return *existing, nil
+	}
+	return proposed, nil
+}
+
+func CorrectionDecisionStatus(runDir string) (*CorrectionDecision, error) {
+	path := filepath.Join(runDir, DirectoryName, CorrectionDecisionFileName)
+	var record CorrectionDecision
+	if err := decodeFile(path, &record); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if err := validateCorrectionDecision(record); err != nil {
+		return nil, err
+	}
+	return &record, nil
+}
+
+func validateCorrectionDecision(record CorrectionDecision) error {
+	if record.SchemaVersion != CurrentSchemaVersion {
+		return fmt.Errorf("correction decision schema_version %d is not supported", record.SchemaVersion)
+	}
+	if err := validateTarget(record.Target); err != nil {
+		return err
+	}
+	if !digestPattern.MatchString(record.CorrectionRequestID) {
+		return errors.New("correction decision correction_request_id is malformed")
+	}
+	switch record.Decision {
+	case consent.Granted, consent.Declined:
+		return nil
+	default:
+		return fmt.Errorf("correction decision %q must be %q or %q", record.Decision, consent.Granted, consent.Declined)
+	}
+}
+
+// RunCorrection resolves the separate correction decision for the exact
+// paused correction request. A declined decision settles the lifecycle as
+// rejected without ever invoking a provider. A granted decision spends the
+// one permitted correction: a fresh corrector proposes a revised candidate
+// over Workspace, the proposal is captured into its own immutable snapshot
+// exactly like the initial candidate, and a fresh reviewer independently
+// re-reviews it. A correction_required verdict on this second attempt
+// escalates instead of pausing again — MaxCorrections permits exactly one.
+func RunCorrection(ctx context.Context, options Options) (Lifecycle, error) {
+	if err := validateCorrectionOptions(options); err != nil {
+		return Lifecycle{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return Lifecycle{}, fmt.Errorf("correction cancelled before it started: %w", err)
+	}
+
+	reviewDir := filepath.Join(options.RunDir, DirectoryName)
+	current, err := Status(options.RunDir)
+	if err != nil {
+		return Lifecycle{}, fmt.Errorf("resolve review lifecycle: %w", err)
+	}
+	if current == nil || current.State != StateCorrectionRequired {
+		return Lifecycle{}, errors.New("correction requires a lifecycle paused for correction")
+	}
+	record := *current
+	correctionRequest, err := CorrectionStatus(options.RunDir)
+	if err != nil {
+		return record, fmt.Errorf("resolve correction request: %w", err)
+	}
+	if correctionRequest == nil || correctionRequest.ID != record.CorrectionRequestID {
+		return record, errors.New("correction request is missing or does not match the paused lifecycle")
+	}
+	decision, err := CorrectionDecisionStatus(options.RunDir)
+	if err != nil {
+		return record, fmt.Errorf("resolve correction decision: %w", err)
+	}
+	if decision == nil || decision.CorrectionRequestID != correctionRequest.ID {
+		return record, errors.New("correction requires a separate immutable decision for the exact correction request")
+	}
+
+	if decision.Decision == consent.Declined {
+		record.State = StateRejected
+		record.Verdict = VerdictRejected
+		record.CorrectionRequestID = ""
+		if err := writeCurrent(reviewDir, record); err != nil {
+			return record, err
+		}
+		return record, nil
+	}
+
+	if record.CorrectionsUsed >= record.MaxCorrections {
+		return record, errors.New("correction budget is exhausted")
+	}
+	if err := requireReviewModeOn(options.ReviewMode); err != nil {
+		return record, err
+	}
+
+	snapshotDir := filepath.Join(options.RunDir, "snapshot")
+	stored, err := snapshot.Load(snapshotDir, record.Target.SnapshotID)
+	if err != nil {
+		return record, fmt.Errorf("verify review snapshot: %w", err)
+	}
+
+	attempt := record.Attempt + 1
+	correctionHandoff := handoff.Request{
+		SchemaVersion:  handoff.CurrentSchemaVersion,
+		ID:             fmt.Sprintf("correction-%d", attempt-1),
+		TaskID:         fmt.Sprintf("%s-correction-%d", record.Target.WorkflowID, attempt-1),
+		From:           handoff.RoleVerifier,
+		To:             handoff.RoleExecutor,
+		Objective:      correctionObjective(correctionRequest),
+		Context:        snapshotReferences(stored.Manifest),
+		Capabilities:   []string{"repository:read"},
+		ExpectedOutput: handoff.OutputContract{Format: "application/json"},
+	}
+	if err := correctionHandoff.Validate(); err != nil {
+		return settleFailure(reviewDir, record, fmt.Errorf("build correction handoff: %w", err))
+	}
+
+	// Re-checked immediately before the first provider call of this attempt.
+	// Nothing has been persisted yet at this point (unlike RunInitial, this
+	// lifecycle was already claimed by attempt 1), so a revocation here still
+	// leaves the one permitted correction unspent and retryable once review
+	// mode is back on, instead of burning it on a transient authority gap.
+	if err := requireReviewModeOn(options.ReviewMode); err != nil {
+		return record, err
+	}
+	proposal, runErr := options.Corrector.Execute(ctx, correctionHandoff)
+	if runErr != nil {
+		return settleFailure(reviewDir, record, fmt.Errorf("correction provider: %w", runErr))
+	}
+	if err := ctx.Err(); err != nil {
+		return settleFailure(reviewDir, record, fmt.Errorf("correction cancelled while provider was running: %w", err))
+	}
+	if err := handoff.ValidateResultFor(correctionHandoff, proposal); err != nil {
+		return settleFailure(reviewDir, record, fmt.Errorf("correction result does not match its request: %w", err))
+	}
+	if proposal.Status != handoff.StatusCompleted {
+		return settleFailure(reviewDir, record, fmt.Errorf("correction handoff ended with status %q", proposal.Status))
+	}
+
+	produced, err := candidate.Produce(correctionHandoff, proposal)
+	if err != nil {
+		return settleFailure(reviewDir, record, fmt.Errorf("produce revised candidate: %w", err))
+	}
+	correctionSnapshotDir := filepath.Join(reviewDir, CorrectionSnapshotDirectory)
+	capturedSnapshot, err := snapshot.Capture(ctx, options.Workspace, correctionSnapshotDir, produced.ID, proposal.Artifacts)
+	if err != nil {
+		return settleFailure(reviewDir, record, fmt.Errorf("snapshot revised candidate: %w", err))
+	}
+	assessment, err := risk.Assess(correctionSnapshotDir, capturedSnapshot.ID, nil)
+	if err != nil {
+		return settleFailure(reviewDir, record, fmt.Errorf("assess revised candidate: %w", err))
+	}
+	revisedTarget := consent.Target{WorkflowID: record.Target.WorkflowID, CandidateID: produced.ID, SnapshotID: capturedSnapshot.ID, RiskTier: assessment.Tier}
+
+	nextRequest := Request{SchemaVersion: CurrentSchemaVersion, ID: fmt.Sprintf("review-%d", attempt), Attempt: attempt, Target: revisedTarget, Reviewer: options.ReviewerIdentity, Capabilities: []string{"repository:read"}, Snapshot: capturedSnapshot.Manifest}
+	if err := validateRequest(nextRequest); err != nil {
+		return settleFailure(reviewDir, record, err)
+	}
+	if err := writeOnce(filepath.Join(reviewDir, AttemptsDirectory, fmt.Sprintf("%d-request.json", attempt)), nextRequest); err != nil {
+		return settleFailure(reviewDir, record, err)
+	}
+
+	if err := requireReviewModeOn(options.ReviewMode); err != nil {
+		return settleFailure(reviewDir, record, err)
+	}
+	result, runErr := options.Reviewer.Review(ctx, nextRequest, correctionSnapshotDir)
+	if runErr != nil {
+		return settleFailure(reviewDir, record, fmt.Errorf("review provider: %w", runErr))
+	}
+	if err := ctx.Err(); err != nil {
+		return settleFailure(reviewDir, record, fmt.Errorf("review cancelled while provider was running: %w", err))
+	}
+	if err := validateResultFor(nextRequest, result); err != nil {
+		return settleFailure(reviewDir, record, err)
+	}
+	if err := writeOnce(filepath.Join(reviewDir, AttemptsDirectory, fmt.Sprintf("%d-result.json", attempt)), result); err != nil {
+		return settleFailure(reviewDir, record, err)
+	}
+
+	record.Attempt = attempt
+	record.CorrectionsUsed = record.CorrectionsUsed + 1
+	record.Target = revisedTarget
+	record.Verdict = result.Verdict
+	record.CorrectionRequestID = ""
+	switch result.Verdict {
+	case VerdictApproved:
+		record.State = StateApproved
+	case VerdictRejected:
+		record.State = StateRejected
+	case VerdictCorrectionRequired:
+		// The correction budget is now exhausted: a second pause would permit
+		// an unbounded loop, so this terminates instead (S4).
+		record.State = StateEscalated
+	}
+	if err := writeCurrent(reviewDir, record); err != nil {
+		return record, err
+	}
+	return record, nil
+}
+
+func validateCorrectionOptions(options Options) error {
+	if err := validateOptions(options); err != nil {
+		return err
+	}
+	if options.Corrector == nil {
+		return errors.New("corrector is required")
+	}
+	if strings.TrimSpace(options.Workspace) == "" {
+		return errors.New("workspace is required")
+	}
+	return nil
+}
+
+func correctionObjective(request *CorrectionRequest) string {
+	summaries := make([]string, 0, len(request.Findings))
+	for _, finding := range request.Findings {
+		summaries = append(summaries, finding.Summary)
+	}
+	return fmt.Sprintf("Address correction request %s: %s", request.ID, strings.Join(summaries, "; "))
+}
+
+func snapshotReferences(manifest snapshot.Manifest) []handoff.Reference {
+	references := make([]handoff.Reference, 0, len(manifest.Entries))
+	for _, entry := range manifest.Entries {
+		references = append(references, handoff.Reference{Kind: entry.Kind, URI: entry.URI, Digest: entry.Digest})
+	}
+	return references
 }
 
 func Status(runDir string) (*Lifecycle, error) {
@@ -328,7 +623,7 @@ func validateReviewer(identity ReviewerIdentity) error {
 }
 
 func validateRequest(request Request) error {
-	if request.SchemaVersion != CurrentSchemaVersion || request.ID == "" || request.Attempt != 1 {
+	if request.SchemaVersion != CurrentSchemaVersion || request.ID == "" || request.Attempt < 1 || request.Attempt > MaxCorrections+1 {
 		return errors.New("review request metadata is invalid")
 	}
 	if err := validateTarget(request.Target); err != nil {

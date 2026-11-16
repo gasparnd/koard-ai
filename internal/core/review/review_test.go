@@ -3,8 +3,10 @@ package review
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +27,12 @@ type reviewerFunc func(context.Context, Request, string) (Result, error)
 
 func (function reviewerFunc) Review(ctx context.Context, request Request, snapshotDir string) (Result, error) {
 	return function(ctx, request, snapshotDir)
+}
+
+type correctorFunc func(context.Context, handoff.Request) (handoff.Result, error)
+
+func (function correctorFunc) Execute(ctx context.Context, request handoff.Request) (handoff.Result, error) {
+	return function(ctx, request)
 }
 
 func TestRunInitialApprovesExactConsentedSnapshot(t *testing.T) {
@@ -398,6 +406,202 @@ func TestRunInitialClaimIsAtomicDespiteLeftoverStaging(t *testing.T) {
 		if strings.HasPrefix(entry.Name(), ".review-claim-") && entry.Name() != ".review-claim-leftover" {
 			t.Fatalf("staging directory %q was not cleaned up after publish", entry.Name())
 		}
+	}
+}
+
+// pausedFixture drives a granted review to its correction_required pause and
+// returns the run directory and the resulting correction request.
+func pausedFixture(t *testing.T) (string, *CorrectionRequest) {
+	t.Helper()
+	runDir, _ := reviewFixture(t, consent.Granted)
+	reviewer := reviewerFunc(func(_ context.Context, request Request, _ string) (Result, error) {
+		result := boundResult(request, VerdictCorrectionRequired)
+		result.Findings = []Finding{{ID: "F1", Severity: SeverityBlocking, Summary: "Fix the boundary", Evidence: []Evidence{{URI: "repo://change.go", Digest: request.Snapshot.Entries[0].Digest}}}}
+		return result, nil
+	})
+	if _, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)}); err != nil {
+		t.Fatal(err)
+	}
+	request, err := CorrectionStatus(runDir)
+	if err != nil || request == nil {
+		t.Fatalf("correction request=%#v err=%v", request, err)
+	}
+	return runDir, request
+}
+
+// workspaceFor returns the workspace directory reviewFixture laid out next to
+// runDir, so a correction test can propose a revision against real bytes.
+func workspaceFor(runDir string) string {
+	return filepath.Join(filepath.Dir(runDir), "workspace")
+}
+
+func approvingReviewer(t *testing.T, wantAttempt int) reviewerFunc {
+	return func(_ context.Context, request Request, _ string) (Result, error) {
+		if request.Attempt != wantAttempt {
+			t.Fatalf("expected attempt %d, got %d", wantAttempt, request.Attempt)
+		}
+		return boundResult(request, VerdictApproved), nil
+	}
+}
+
+func correctingProposal(workspace string) correctorFunc {
+	return func(_ context.Context, request handoff.Request) (handoff.Result, error) {
+		content, err := os.ReadFile(filepath.Join(workspace, "change.go"))
+		if err != nil {
+			return handoff.Result{}, err
+		}
+		digest := fmt.Sprintf("sha256:%x", sha256.Sum256(content))
+		return handoff.Result{SchemaVersion: handoff.CurrentSchemaVersion, HandoffID: request.ID, Role: handoff.RoleExecutor, Status: handoff.StatusCompleted, Summary: "Applied the requested fix.", Artifacts: []handoff.Reference{{Kind: "source", URI: "repo://change.go", Digest: digest}}}, nil
+	}
+}
+
+func TestDecideCorrectionRequiresAPausedLifecycle(t *testing.T) {
+	runDir, _ := reviewFixture(t, consent.Granted)
+	if _, err := DecideCorrection(runDir, consent.Granted); err == nil || !strings.Contains(err.Error(), "paused") {
+		t.Fatalf("expected a paused-lifecycle error, got %v", err)
+	}
+}
+
+func TestDecideCorrectionIsIdempotentAndFailsClosedOnConflict(t *testing.T) {
+	runDir, correctionRequest := pausedFixture(t)
+	first, err := DecideCorrection(runDir, consent.Granted)
+	if err != nil || first.Decision != consent.Granted || first.CorrectionRequestID != correctionRequest.ID {
+		t.Fatalf("decision=%#v err=%v", first, err)
+	}
+	repeat, err := DecideCorrection(runDir, consent.Granted)
+	if err != nil || repeat != first {
+		t.Fatalf("repeat decision=%#v err=%v", repeat, err)
+	}
+	if _, err := DecideCorrection(runDir, consent.Declined); err == nil || !strings.Contains(err.Error(), "already records") {
+		t.Fatalf("expected a conflicting-decision error, got %v", err)
+	}
+}
+
+func TestRunCorrectionSettlesRejectedWhenDeclined(t *testing.T) {
+	runDir, _ := pausedFixture(t)
+	if _, err := DecideCorrection(runDir, consent.Declined); err != nil {
+		t.Fatal(err)
+	}
+	var correctorCalls atomic.Int32
+	corrector := correctorFunc(func(context.Context, handoff.Request) (handoff.Result, error) {
+		correctorCalls.Add(1)
+		return handoff.Result{}, nil
+	})
+	record, err := RunCorrection(context.Background(), Options{RunDir: runDir, Reviewer: reviewerFunc(func(context.Context, Request, string) (Result, error) {
+		t.Fatal("reviewer must not run for a declined correction")
+		return Result{}, nil
+	}), ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On), Workspace: workspaceFor(runDir), Corrector: corrector})
+	if err != nil {
+		t.Fatalf("run correction: %v", err)
+	}
+	if record.State != StateRejected || record.Verdict != VerdictRejected || record.CorrectionRequestID != "" {
+		t.Fatalf("unexpected lifecycle: %#v", record)
+	}
+	if correctorCalls.Load() != 0 {
+		t.Fatal("corrector ran after correction was declined")
+	}
+}
+
+func TestRunCorrectionRequiresASeparateDecision(t *testing.T) {
+	runDir, _ := pausedFixture(t)
+	var calls atomic.Int32
+	corrector := correctorFunc(func(context.Context, handoff.Request) (handoff.Result, error) {
+		calls.Add(1)
+		return handoff.Result{}, nil
+	})
+	if _, err := RunCorrection(context.Background(), Options{RunDir: runDir, Reviewer: reviewerFunc(func(context.Context, Request, string) (Result, error) { return Result{}, nil }), ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On), Workspace: workspaceFor(runDir), Corrector: corrector}); err == nil || !strings.Contains(err.Error(), "decision") {
+		t.Fatalf("expected a missing-decision error, got %v", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatal("corrector ran without a separate correction decision")
+	}
+}
+
+func TestRunCorrectionRequiresReviewModeOnAndStaysRetryable(t *testing.T) {
+	runDir, _ := pausedFixture(t)
+	if _, err := DecideCorrection(runDir, consent.Granted); err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	corrector := correctorFunc(func(context.Context, handoff.Request) (handoff.Result, error) {
+		calls.Add(1)
+		return handoff.Result{}, nil
+	})
+	record, err := RunCorrection(context.Background(), Options{RunDir: runDir, Reviewer: reviewerFunc(func(context.Context, Request, string) (Result, error) { return Result{}, nil }), ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.Off), Workspace: workspaceFor(runDir), Corrector: corrector})
+	if err == nil || !strings.Contains(err.Error(), "mode") {
+		t.Fatalf("expected a review-mode error, got %v", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatal("corrector ran while review mode was off")
+	}
+	if record.State != StateCorrectionRequired {
+		t.Fatalf("a revoked attempt must stay retryable, got %#v", record)
+	}
+	stored, statusErr := Status(runDir)
+	if statusErr != nil || stored == nil || stored.State != StateCorrectionRequired {
+		t.Fatalf("persisted lifecycle must stay retryable: stored=%#v err=%v", stored, statusErr)
+	}
+}
+
+func TestRunCorrectionApprovesRevisedCandidateAfterGrant(t *testing.T) {
+	runDir, _ := pausedFixture(t)
+	if _, err := DecideCorrection(runDir, consent.Granted); err != nil {
+		t.Fatal(err)
+	}
+	workspace := workspaceFor(runDir)
+	if err := os.WriteFile(filepath.Join(workspace, "change.go"), []byte("package change\n\n// fixed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var correctorCalls atomic.Int32
+	corrector := correctorFunc(func(ctx context.Context, request handoff.Request) (handoff.Result, error) {
+		correctorCalls.Add(1)
+		return correctingProposal(workspace)(ctx, request)
+	})
+	record, err := RunCorrection(context.Background(), Options{RunDir: runDir, Reviewer: approvingReviewer(t, 2), ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On), Workspace: workspace, Corrector: corrector})
+	if err != nil {
+		t.Fatalf("run correction: %v", err)
+	}
+	if record.State != StateApproved || record.Attempt != 2 || record.CorrectionsUsed != 1 || record.CorrectionRequestID != "" {
+		t.Fatalf("unexpected lifecycle: %#v", record)
+	}
+	if correctorCalls.Load() != 1 {
+		t.Fatalf("expected exactly one corrector call, got %d", correctorCalls.Load())
+	}
+	stored, statusErr := Status(runDir)
+	if statusErr != nil || stored == nil || *stored != record {
+		t.Fatalf("stored=%#v err=%v", stored, statusErr)
+	}
+	for _, name := range []string{"2-request.json", "2-result.json"} {
+		if _, err := os.Stat(filepath.Join(runDir, DirectoryName, AttemptsDirectory, name)); err != nil {
+			t.Fatalf("missing %s: %v", name, err)
+		}
+	}
+}
+
+func TestRunCorrectionEscalatesOnSecondCorrectionRequired(t *testing.T) {
+	runDir, originalRequest := pausedFixture(t)
+	if _, err := DecideCorrection(runDir, consent.Granted); err != nil {
+		t.Fatal(err)
+	}
+	workspace := workspaceFor(runDir)
+	corrector := correctingProposal(workspace)
+	reviewer := reviewerFunc(func(_ context.Context, request Request, _ string) (Result, error) {
+		result := boundResult(request, VerdictCorrectionRequired)
+		result.Findings = []Finding{{ID: "F2", Severity: SeverityBlocking, Summary: "Still broken", Evidence: []Evidence{{URI: "repo://change.go", Digest: request.Snapshot.Entries[0].Digest}}}}
+		return result, nil
+	})
+	record, err := RunCorrection(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On), Workspace: workspace, Corrector: corrector})
+	if err != nil {
+		t.Fatalf("run correction: %v", err)
+	}
+	if record.State != StateEscalated || record.Attempt != 2 || record.CorrectionsUsed != 1 {
+		t.Fatalf("unexpected lifecycle: %#v", record)
+	}
+	// No second pause: the original correction request remains the only one
+	// ever written, proving no loop was permitted.
+	current, err := CorrectionStatus(runDir)
+	if err != nil || current == nil || current.ID != originalRequest.ID {
+		t.Fatalf("expected the original correction request to remain unchanged: current=%#v err=%v", current, err)
 	}
 }
 

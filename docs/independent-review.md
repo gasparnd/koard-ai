@@ -2,7 +2,7 @@
 
 Independent review is Koard's read-only checkpoint between a consented candidate and any future mutation capability. It asks a fresh reviewer to inspect the exact bytes the user authorized—not whatever happens to be in the workspace later.
 
-The core lifecycle exists now. The CLI and OpenCode wiring remain part of the active roadmap milestone and are not yet available as user commands.
+The core lifecycle — initial review and the one bounded correction — exists now. The CLI and OpenCode wiring remain part of the active roadmap milestone and are not yet available as user commands.
 
 ## Why this layer exists
 
@@ -35,7 +35,20 @@ Keeping these questions separate prevents one broad permission from silently bec
 9. Validate the result against the request identity, attempt, target, and snapshot evidence.
 10. Persist the immutable result and update `review/review.json`.
 
-The result can approve, reject, or request correction. A correction request pauses the lifecycle. It does not run a corrector and does not change workspace files.
+The result can approve, reject, or request correction. A correction request pauses the lifecycle. It does not run a corrector and does not change workspace files by itself.
+
+## Correction path
+
+A paused, `correction_required` lifecycle stays paused until a **separate** immutable decision answers the exact pending correction request — review consent never implies correction authority.
+
+1. `DecideCorrection` records `granted` or `declined` for the exact `correction_request_id` the lifecycle is paused on. Repeating the same decision is idempotent; a conflicting one fails closed.
+2. `RunCorrection` requires that decision to exist for the exact paused request before doing anything else.
+3. **Declined**: the lifecycle settles as `rejected`. No provider ever runs.
+4. **Granted**: review mode must be `on` (checked live, the same as the initial attempt). Since nothing has been claimed or persisted yet at this point, a revocation here leaves the lifecycle unchanged and retryable — it does not burn the one permitted correction.
+5. A fresh corrector is handed a read-only (`repository:read`) handoff describing the findings and the original snapshot's artifacts, and proposes a revision — exactly the same `Runner`, `candidate.Produce`, and `snapshot.Capture` primitives the initial workflow candidate already uses, reused rather than duplicated.
+6. The proposal is captured into its own immutable snapshot under `review/correction-snapshot/` and re-assessed for risk, producing a revised target (new candidate and snapshot identity, same workflow).
+7. That revised target is independently re-reviewed as attempt 2, with its own immutable `2-request.json` / `2-result.json`, exactly like the first attempt.
+8. Approved or rejected settles the lifecycle. A second `correction_required` verdict **escalates** instead of pausing again — `MaxCorrections` permits exactly one, so no loop is possible, and no second correction-request file is ever written.
 
 ## Persisted evidence
 
@@ -47,9 +60,13 @@ The result can approve, reject, or request correction. A correction request paus
 └── review/
     ├── review.json
     ├── correction-request.json       # only when correction is requested
+    ├── correction-decision.json      # only once a separate decision is recorded
+    ├── correction-snapshot/          # only once a granted correction proposes a revision
     └── attempts/
         ├── 1-request.json
-        └── 1-result.json
+        ├── 1-result.json
+        ├── 2-request.json            # only after a granted correction is re-reviewed
+        └── 2-result.json
 ```
 
 `review.json` is the current state. Attempt files are immutable evidence. A claimed lifecycle always leaves a diagnosable state, including provider and validation failures.
@@ -57,15 +74,17 @@ The result can approve, reject, or request correction. A correction request paus
 ## Invariants
 
 - Review starts only after exact granted consent and successful snapshot verification.
-- Review-mode authority is checked live, not once and assumed: it is re-read before the claim and again right before the reviewer runs, so a revocation mid-attempt is never missed.
+- Review-mode authority is checked live, not once and assumed: it is re-read before the claim and again right before each reviewer or corrector invocation, so a revocation mid-attempt is never missed.
 - The claim itself is all-or-nothing: `attempts/` and `review.json` are staged together and published with one directory rename, so a crash can never leave a half-claimed lifecycle that blocks every future attempt without explanation.
+- A review-mode revocation caught before anything has been persisted for the current step (the initial claim, or the start of a correction) leaves the lifecycle unchanged and retryable; one caught after a claim or a provider has already run settles the lifecycle as `failed`, so the distinction is always diagnosable from persisted state.
 - Reviewer identity comes from trusted application configuration, never model output.
-- The reviewer receives only `repository:read`.
-- Findings may cite only URI and digest pairs present in the reviewed snapshot.
+- The reviewer and the corrector each receive only `repository:read`.
+- Findings may cite only URI and digest pairs present in the snapshot they review.
 - An approved result cannot contain blocking findings.
 - Concurrent or replayed claims never interleave: the loser's rename is rejected because the destination is already a complete, non-empty directory, and it is reported the same way as any other already-claimed lifecycle.
-- Review never applies files or authorizes commit, push, pull request, merge, or release.
-- Correction requires a separate immutable user decision and remains proposal-only.
+- Review never applies files or authorizes commit, push, pull request, merge, or release — a correction's revised candidate is itself just another immutable, read-only-captured snapshot.
+- Correction requires a separate immutable decision bound to the exact review target and the exact correction request, and remains proposal-only.
+- Exactly one correction is ever possible: a second `correction_required` verdict escalates rather than pausing, and `DecideCorrection` only accepts a decision while the lifecycle is paused for that exact request.
 
 ## Failure behavior
 
@@ -73,7 +92,7 @@ Koard fails closed before provider invocation when consent, snapshot, or review-
 
 ## Verification
 
-The core tests use isolated temporary workspaces and fake reviewers to prove exact binding, read-only capabilities, immutable evidence, correction pause, provider failure persistence, and concurrent claim refusal:
+The core tests use isolated temporary workspaces and fake reviewers/correctors to prove exact binding, read-only capabilities, immutable evidence, correction pause, separately granted and declined correction decisions, one correction and re-review, second-correction escalation, provider failure persistence, and concurrent claim refusal:
 
 ```bash
 go test -race ./internal/core/review
