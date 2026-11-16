@@ -71,6 +71,8 @@ func Run(args []string, cwd string, stdout, stderr io.Writer) int {
 		return 0
 	case "review":
 		return runReview(args[1:], cwd, stdout, stderr)
+	case "run":
+		return runWorkflow(args[1:], cwd, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "koard: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, "Run 'koard help' to see available commands.")
@@ -129,6 +131,8 @@ Usage:
 Commands:
   init       Create the project-level Koard structure
   doctor     Check the local Koard configuration
+  run --workflow <id> --task <id> --objective <text> [--policy fixed|planned]
+             Run a read-only workflow with the configured provider for each role
   review mode <status|enable|disable> [--scope clone|global]
              Show or set the user-owned review mode
   review consent <status|grant|decline> --workflow <id>

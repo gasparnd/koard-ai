@@ -64,7 +64,7 @@ Any other value — including the bootstrap `unset` that `koard init` writes, wh
 - **Project-level Codex configuration is still read.** Only user configuration and rule files are ignored; a `.codex/` directory inside the repository can still influence the run. The adapter's guarantee covers the tool calls it drives — Codex's own shell tool stays inside the read-only sandbox, and a write attempt fails there (verified against a real `0.149.0` run: *"writing is blocked by read-only sandbox"*). It does not claim that every process Codex itself starts, such as a project-configured MCP server, is contained, because the adapter has no flag that ignores project configuration.
 - **Approvals are not configured, they are absent.** The adapter passes no approval flags, and `codex exec` is non-interactive, so anything that would need approval fails instead of being granted. The adapter never enables auto-approval.
 - **Network isolation is not asserted.** The adapter does not verify or configure network access; its guarantee is about workspace mutation, and claiming more than that would be a claim it cannot test.
-- **The router still has no CLI wiring.** The adapter satisfies `agentrouter.Runner` structurally, but no command invokes the router yet, so independent review is the only production consumer today.
+- **Routing stays outside the adapter.** `koard run` composes this adapter per destination role; independent review remains a separate command and authority boundary. See [routing.md](routing.md).
 
 ## Verification
 

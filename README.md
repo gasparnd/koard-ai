@@ -12,6 +12,8 @@ Koard is building its first governed orchestration slice. The current CLI can in
 
 ## Quick start
 
+`koard run --workflow <id> --task <id> --objective <text> [--policy fixed|planned]` executes a read-only route using the provider configured for each role. `planned` invokes a planner before executor and verifier; `fixed` preserves the original two handoffs. Review consent, independent review, and apply remain separate. See [routing](docs/routing.md) for setup and limits.
+
 Requirements: Go 1.23 or newer.
 
 ```bash

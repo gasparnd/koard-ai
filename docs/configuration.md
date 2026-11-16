@@ -44,6 +44,8 @@ A resolved `provider` names a runtime adapter. `koard review run` currently acce
 
 ## Check a project
 
+`koard run` uses the same provider choices for each destination role: executor and verifier for `fixed`, plus planner for `planned`. Required roles must have a supported provider and a model other than `unset`; an unused planner may remain unresolved. `--policy` selects routing without reinterpreting `workflow.default`. See [routing.md](routing.md).
+
 ```bash
 go run ./cmd/koard doctor
 ```

@@ -1,6 +1,6 @@
 # Self-hosting Koard
 
-Koard should eventually use its own orchestration model to develop Koard. This is progressive bootstrapping, not a claim that the current CLI already orchestrates agents.
+Koard should eventually use its own orchestration model to develop Koard. The CLI now routes read-only agents through `koard run`, including real planning with `--policy planned`; it does not yet execute the complete ODD workflow engine. See [routing.md](routing.md).
 
 ## Current bootstrap
 
