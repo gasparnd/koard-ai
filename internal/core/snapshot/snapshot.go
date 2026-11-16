@@ -160,6 +160,38 @@ func Load(dir, id string) (Snapshot, error) {
 	return Snapshot{ID: id, Manifest: manifest}, nil
 }
 
+// Materialize reconstructs every entry of manifest as an ordinary file under
+// dir, at the relative path its repo:// URI names, after verifying the
+// stored bytes still match the entry's digest. It is the inverse of what
+// Capture reads from a real workspace: a reviewer that only has ordinary
+// read-only file tools (not Go access to the content-addressed store) needs
+// the exact reviewed bytes laid out as a real tree, not the live workspace,
+// which may already have drifted.
+func Materialize(snapshotDir, dir string, manifest Manifest) error {
+	for _, entry := range manifest.Entries {
+		if !strings.HasPrefix(entry.URI, RepoScheme) {
+			return fmt.Errorf("only %s artifacts can be materialized", RepoScheme)
+		}
+		relative := strings.TrimPrefix(entry.URI, RepoScheme)
+		if relative == "" || strings.Contains(relative, `\`) || path.IsAbs(relative) ||
+			path.Clean(relative) != relative || !filepath.IsLocal(filepath.FromSlash(relative)) {
+			return errors.New("path must be a canonical relative path inside the workspace")
+		}
+		content, err := ReadEntry(snapshotDir, entry)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dir, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return fmt.Errorf("create materialized directory: %w", err)
+		}
+		if err := os.WriteFile(target, content, 0o444); err != nil {
+			return fmt.Errorf("materialize %q: %w", entry.URI, err)
+		}
+	}
+	return nil
+}
+
 // ReadEntry returns the stored bytes of one entry after checking that they
 // still match its digest and size.
 func ReadEntry(dir string, entry Entry) ([]byte, error) {

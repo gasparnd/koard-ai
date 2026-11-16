@@ -2,7 +2,7 @@
 
 Independent review is Koard's read-only checkpoint between a consented candidate and any future mutation capability. It asks a fresh reviewer to inspect the exact bytes the user authorized—not whatever happens to be in the workspace later.
 
-The core lifecycle — initial review and the one bounded correction — exists now. The CLI and OpenCode wiring remain part of the active roadmap milestone and are not yet available as user commands.
+The core lifecycle, the OpenCode-backed reviewer and corrector, and the CLI surface all exist now: `koard review run`, `koard review status`, and `koard review correction`.
 
 ## Why this layer exists
 
@@ -19,8 +19,9 @@ Keeping these questions separate prevents one broad permission from silently bec
 | Risk | Classifies the candidate before review | Policy can react to consequence without changing identity |
 | Consent | Grants review authority for one exact target | The user controls which candidate may be inspected |
 | Review lifecycle | Claims one run, emits a bound request, validates the result, and persists the transition | Providers cannot invent authority or skip states |
-| Provider adapter | Runs a fresh reviewer with read-only capabilities | Core contracts stay portable across runtimes |
+| Provider adapter | Runs a fresh reviewer (and, for a correction, a corrector) with read-only capabilities over a materialized snapshot | Core contracts stay portable across runtimes; the live workspace is never what gets inspected |
 | Correction consent | Separately authorizes one proposal-only correction | Review permission never silently becomes correction permission |
+| CLI | Exposes `run`, `status`, `correction` over the exact run directory | The only way a human or script touches this lifecycle |
 
 ## Initial review path
 
@@ -31,7 +32,7 @@ Keeping these questions separate prevents one broad permission from silently bec
 5. Claim `.koard/state/runs/<workflow>/review/`: build `attempts/` and the initial `review.json` in a sibling temporary directory first, then publish both with one atomic rename. A reader or a second claimant only ever sees no review directory or the fully formed one, never one half-written by a crash in between.
 6. Persist the immutable request under `review/attempts/1-request.json`.
 7. Require again that review mode is still `on`, immediately before invoking the reviewer — a revocation during claim preparation, or while a slow provider is starting, must still stop the attempt.
-8. Invoke a fresh reviewer with only `repository:read`.
+8. Invoke a fresh reviewer with only `repository:read`, over the exact snapshot materialized into a disposable temporary directory — never the live workspace, which may already have drifted from what was consented to.
 9. Validate the result against the request identity, attempt, target, and snapshot evidence.
 10. Persist the immutable result and update `review/review.json`.
 
@@ -86,6 +87,20 @@ A paused, `correction_required` lifecycle stays paused until a **separate** immu
 - Correction requires a separate immutable decision bound to the exact review target and the exact correction request, and remains proposal-only.
 - Exactly one correction is ever possible: a second `correction_required` verdict escalates rather than pausing, and `DecideCorrection` only accepts a decision while the lifecycle is paused for that exact request.
 
+## CLI
+
+```bash
+koard review run --workflow <id>        # executes only the next authorized bounded transition
+koard review status --workflow <id>     # read-only: state, attempt, verdict, correction budget
+koard review correction status --workflow <id>
+koard review correction grant --workflow <id>
+koard review correction decline --workflow <id>
+```
+
+`run` resolves the current lifecycle itself: with no review yet, it runs the initial attempt; paused for correction with a decision already recorded, it runs that one correction; paused without a decision, it refuses and names the missing step; already settled (`approved`, `rejected`, `failed`, `escalated`), it refuses — there is nothing left to run. `status` and `correction status` never write anything.
+
+The reviewer and corrector are the project's existing `agents.verifier` OpenCode configuration — independent review adds no config schema of its own for this milestone. `Materialize` (in the `snapshot` package) turns the exact reviewed snapshot back into an ordinary file tree in a disposable directory before each reviewer or corrector invocation, so a generic read-only coding agent can inspect it with its own tools without ever touching the live, possibly-drifted workspace; the directory is removed as soon as the invocation returns.
+
 ## Failure behavior
 
 Koard fails closed before provider invocation when consent, snapshot, or review-mode state is absent, declined, malformed, mismatched, or unverifiable. After a lifecycle is claimed, provider failures, a mid-attempt review-mode revocation, and invalid results all become terminal `failed` records so operators can distinguish “never started” from “started but failed.”
@@ -96,4 +111,7 @@ The core tests use isolated temporary workspaces and fake reviewers/correctors t
 
 ```bash
 go test -race ./internal/core/review
+go test -race ./internal/adapters/opencode
+go test -race ./internal/core/snapshot
+go test -race ./internal/cli
 ```
