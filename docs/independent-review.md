@@ -2,7 +2,7 @@
 
 Independent review is Koard's read-only checkpoint between a consented candidate and any future mutation capability. It asks a fresh reviewer to inspect the exact bytes the user authorized—not whatever happens to be in the workspace later.
 
-The core lifecycle, the OpenCode-backed reviewer and corrector, and the CLI surface all exist now: `koard review run`, `koard review status`, and `koard review correction`.
+The core lifecycle, the runtime-backed reviewer and corrector (OpenCode or Codex, whichever `agents.verifier.provider` selects), and the CLI surface all exist now: `koard review run`, `koard review status`, and `koard review correction`.
 
 ## Why this layer exists
 
@@ -118,7 +118,7 @@ koard review correction decline --workflow <id>
 
 `run` resolves the current lifecycle itself: with no review yet, it runs the initial attempt; paused for correction with a decision already recorded, it runs that one correction; paused without a decision, it refuses and names the missing step; already settled (`approved`, `rejected`, `failed`, `escalated`), it refuses — there is nothing left to run. `status` and `correction status` never write anything.
 
-The reviewer and corrector are the project's existing `agents.verifier` OpenCode configuration — independent review adds no config schema of its own for this milestone. `Materialize` (in the `snapshot` package) turns the exact reviewed snapshot back into an ordinary file tree in a disposable directory before each reviewer or corrector invocation, so a generic read-only coding agent can inspect it with its own tools without ever touching the live, possibly-drifted workspace; the directory is removed as soon as the invocation returns.
+The reviewer and corrector are the project's existing `agents.verifier` configuration — independent review adds no config schema of its own. Its `provider` field selects the runtime adapter: `opencode` or `codex`. Any other value, including the `unset` that `koard init` writes while role selection is unresolved, fails closed with a message naming both supported providers instead of silently choosing one. `Materialize` (in the `snapshot` package) turns the exact reviewed snapshot back into an ordinary file tree in a disposable directory before each reviewer or corrector invocation, so a generic read-only coding agent can inspect it with its own tools without ever touching the live, possibly-drifted workspace; the directory is removed as soon as the invocation returns. See `codex-adapter.md` for how the Codex adapter enforces the same read-only guarantee with a sandbox instead of a per-tool policy.
 
 ## Failure behavior
 
@@ -131,6 +131,7 @@ The core tests use isolated temporary workspaces and fake reviewers/correctors t
 ```bash
 go test -race ./internal/core/review
 go test -race ./internal/adapters/opencode
+go test -race ./internal/adapters/codex
 go test -race ./internal/core/snapshot
 go test -race ./internal/cli
 ```

@@ -53,7 +53,7 @@ Replay, idempotency, and recovery after the Koard process dies move to controlle
 
 ### 4. Orchestration expansion
 
-- [ ] Codex runtime adapter.
+- [x] Codex runtime adapter.
 - [ ] Generalized Agent Router policies beyond the fixed route.
 - [ ] Engram memory adapter based on observed persistence requirements.
 - [ ] End-to-end multi-runtime workflow with persisted handoffs and receipts.

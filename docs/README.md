@@ -27,6 +27,7 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | Document | Purpose |
 |---|---|
 | `architecture.md` | Components, contracts, and dependency direction |
+| `codex-adapter.md` | The Codex runtime adapter: sandbox guard, invocation surface, provider selection |
 | `configuration.md` | Current configuration schema and validation rules |
 | `consent.md` | Candidate-bound consent for independent review |
 | `contributing.md` | Development workflow and checks |

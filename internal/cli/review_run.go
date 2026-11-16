@@ -7,6 +7,7 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/koard-ai/koard/internal/adapters/codex"
 	"github.com/koard-ai/koard/internal/adapters/opencode"
 	"github.com/koard-ai/koard/internal/core/agentrouter"
 	applycore "github.com/koard-ai/koard/internal/core/apply"
@@ -16,21 +17,39 @@ import (
 )
 
 // reviewProviders resolves the Reviewer and Corrector used by 'review run'.
-// Production builds a real OpenCode adapter from the project's existing
-// agents.verifier configuration — independent review adds no config schema
-// of its own for this milestone. Tests substitute fakes by overriding this
-// variable.
+// Production builds a real runtime adapter from the project's existing
+// agents.verifier configuration — independent review adds no config schema of
+// its own. The provider must name a supported runtime; an unknown value fails
+// closed instead of silently choosing one. Tests substitute fakes by
+// overriding this variable.
 var reviewProviders = func(cwd string) (reviewcore.Reviewer, agentrouter.Runner, reviewcore.ReviewerIdentity, error) {
 	projectConfig, err := diagnoseProject(cwd)
 	if err != nil {
 		return nil, nil, reviewcore.ReviewerIdentity{}, err
 	}
-	adapter, err := opencode.New(opencode.Config{Workspace: cwd, Model: projectConfig.Agents.Verifier.Model})
-	if err != nil {
-		return nil, nil, reviewcore.ReviewerIdentity{}, err
+	verifier := projectConfig.Agents.Verifier
+
+	switch verifier.Provider {
+	case "opencode":
+		adapter, err := opencode.New(opencode.Config{Workspace: cwd, Model: verifier.Model})
+		if err != nil {
+			return nil, nil, reviewcore.ReviewerIdentity{}, err
+		}
+		identity := reviewcore.ReviewerIdentity{Runtime: "opencode", Model: verifier.Model}
+		return adapter, adapter, identity, nil
+	case "codex":
+		adapter, err := codex.New(codex.Config{Workspace: cwd, Model: verifier.Model})
+		if err != nil {
+			return nil, nil, reviewcore.ReviewerIdentity{}, err
+		}
+		identity := reviewcore.ReviewerIdentity{Runtime: "codex", Model: verifier.Model}
+		return adapter, adapter, identity, nil
+	default:
+		return nil, nil, reviewcore.ReviewerIdentity{}, fmt.Errorf(
+			"agents.verifier.provider %q is unsupported; supported providers are %q and %q",
+			verifier.Provider, "opencode", "codex",
+		)
 	}
-	identity := reviewcore.ReviewerIdentity{Runtime: "opencode", Model: projectConfig.Agents.Verifier.Model}
-	return adapter, adapter, identity, nil
 }
 
 func reviewStatus(args []string, cwd string, stdout io.Writer) error {
