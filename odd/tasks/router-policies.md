@@ -1,6 +1,6 @@
 # Router policies and CLI execution
 
-Objective: preserve the fixed route and add real planning through a provider-neutral policy selected by CLI. Branch: `task/3.2-router-policies`; baseline: `542ccf3`.
+Objective: preserve the fixed route and add real planning through a provider-neutral policy selected by CLI. Completed on `task/3.2-router-cli`; tracker: `task/3.2-router-policies`; baseline: `542ccf3`.
 Delivery: `feature-branch-chain`, approved by the user; tracker `task/3.2-router-policies`, then `task/3.2-router-core`, then `task/3.2-router-cli`. No publishing. Forecast about 550 authored changed lines; observed 666 before final log updates. Runner: `go test` and `go vet`. Route: inline; dependent core/CLI work, no parallel writer trigger.
 
 ## Specs
@@ -12,8 +12,8 @@ Delivery: `feature-branch-chain`, approved by the user; tracker `task/3.2-router
 ## Tasks
 
 - [x] T1 — S1-S3 — inline — verified — named core policies, explicit sender, legacy outcome compatibility and tests; RED missing Options.Policy, GREEN focused tests. Commit `6a776b7` on `task/3.2-router-core`; native review approved and acknowledged. Risk: item 3 (handoff sender contract and shared router).
-- [x] T2 — S1-S3 — inline — implementation verified — CLI execution with per-role providers, tests and synchronized documentation; RED missing workflowProvider, GREEN public CLI tests. Child `task/3.2-router-cli`; commit and native review pending. Risk: item 2 (composition must preserve read-only provider execution).
-- [ ] T3 — S1-S3 — inline plus independent verifier — in progress — suite/vet, differential checks and independent verification passed; native review and commits pending. Risk: items 2 and 3.
+- [x] T2 — S1-S3 — inline — verified — CLI execution with per-role providers, tests and synchronized documentation; RED missing workflowProvider, GREEN public CLI tests. Commit `66a4e70` on `task/3.2-router-cli`; native review approved and acknowledged. Risk: item 2 (composition must preserve read-only provider execution).
+- [x] T3 — S1-S3 — inline plus independent verifier — verified — suite/vet, differential checks and independent verification passed; both work-unit reviews approved and acknowledged. Evidence in `6a776b7` and `66a4e70`. Risk: items 2 and 3.
 
 ## Log
 
@@ -30,3 +30,6 @@ Delivery: `feature-branch-chain`, approved by the user; tracker `task/3.2-router
 - L11: Core unit `6a776b7` contains 287 authored changed lines across nine files; rollback is limited to routing policies, sender validation, their tests and documentation. Existing adapters remain untouched (no new runtime invocation surface in this unit). Committed-only assessment against `542ccf3` reports high / review_due / high_risk with item 3 escalation. The pending CLI files are staged only to resolve the inventory prerequisite and are excluded by committed-only review. No publishing or native START yet.
 - L12: User granted native core review through the native consent UI. Lineage `review-02f4df18c0f18372`: risk/readability/reliability returned no findings. Exact acknowledgement confirmed `authority: burned` for the committed core target. Boundary advances to `6a776b7`.
 - L13: CLI unit retains the already-verified source and fake-runtime harness; documentation now exposes the command, and the roadmap item is checked. Rollback removes the CLI command/composition and its tests/docs without reverting the core policies. Paid provider execution and end-to-end multi-runtime receipts remain unverified and out of this slice.
+- L14: CLI unit `66a4e70` contains 395 authored changed lines across 13 files. User granted native review through its own consent UI. Lineage `review-2761672634556a36`: risk/resilience/readability/reliability approved; exact acknowledgement confirmed `authority: burned`. Boundary advances to `66a4e70`. No correction was opened.
+- L15: Three non-blocking follow-ups remain separate later work: replace consecutive string arguments at the CLI execution boundary with named options; assert required context presence before testing its URI/digest; expand preflight tests for unresolved verifier/models and unused planner acceptance. These are advisory, not demonstrated runtime defects, and do not reopen the approved review.
+- L16: Feature complete locally. Both slices stay below the 400-line review guideline (287 core, 395 CLI); tracker/core/CLI branches remain local, with no push, PR, merge or real model execution. Closing log changes require structural readback only. The next roadmap item is the Engram memory adapter; end-to-end multi-runtime receipts remain planned.
