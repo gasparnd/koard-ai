@@ -40,7 +40,7 @@ func TestRunInitialApprovesExactConsentedSnapshot(t *testing.T) {
 		return boundResult(request, VerdictApproved), nil
 	})
 
-	record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: identity, ReviewMode: reviewmode.On})
+	record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: identity, ReviewMode: fixedMode(reviewmode.On)})
 	if err != nil {
 		t.Fatalf("run review: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestRunInitialPausesForSeparateCorrectionConsent(t *testing.T) {
 		return result, nil
 	})
 
-	record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On})
+	record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestRunInitialRejectsWithoutGrantedExactConsent(t *testing.T) {
 				calls.Add(1)
 				return Result{}, nil
 			})
-			if _, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On}); err == nil || !strings.Contains(err.Error(), "granted") {
+			if _, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)}); err == nil || !strings.Contains(err.Error(), "granted") {
 				t.Fatalf("expected granted-consent error, got %v", err)
 			}
 			if calls.Load() != 0 {
@@ -118,7 +118,7 @@ func TestRunInitialRejectsReviewModeOffBeforeClaim(t *testing.T) {
 		calls.Add(1)
 		return boundResult(request, VerdictApproved), nil
 	})
-	if _, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.Off}); err == nil || !strings.Contains(err.Error(), "mode") {
+	if _, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.Off)}); err == nil || !strings.Contains(err.Error(), "mode") {
 		t.Fatalf("expected review-mode error, got %v", err)
 	}
 	if calls.Load() != 0 {
@@ -151,7 +151,7 @@ func TestRunInitialRejectsCorruptSnapshotBeforeClaim(t *testing.T) {
 		calls.Add(1)
 		return Result{}, nil
 	})
-	if _, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On}); err == nil || !strings.Contains(err.Error(), "digest") {
+	if _, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)}); err == nil || !strings.Contains(err.Error(), "digest") {
 		t.Fatalf("expected snapshot verification error, got %v", err)
 	}
 	if calls.Load() != 0 {
@@ -166,7 +166,7 @@ func TestRunInitialCancellationDoesNotClaimLifecycle(t *testing.T) {
 	runDir, _ := reviewFixture(t, consent.Granted)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := RunInitial(ctx, Options{RunDir: runDir, Reviewer: reviewerFunc(func(context.Context, Request, string) (Result, error) { return Result{}, nil }), ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On}); !errors.Is(err, context.Canceled) {
+	if _, err := RunInitial(ctx, Options{RunDir: runDir, Reviewer: reviewerFunc(func(context.Context, Request, string) (Result, error) { return Result{}, nil }), ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected cancellation, got %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(runDir, DirectoryName)); !os.IsNotExist(err) {
@@ -181,7 +181,7 @@ func TestRunInitialCancellationAfterClaimFailsDiagnosably(t *testing.T) {
 		cancel()
 		return boundResult(request, VerdictApproved), nil
 	})
-	record, err := RunInitial(ctx, Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On})
+	record, err := RunInitial(ctx, Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)})
 	if err == nil || !errors.Is(err, context.Canceled) || record.State != StateFailed {
 		t.Fatalf("record=%#v err=%v", record, err)
 	}
@@ -196,7 +196,7 @@ func TestStatusStrictlyDecodesLifecycle(t *testing.T) {
 	reviewer := reviewerFunc(func(_ context.Context, request Request, _ string) (Result, error) {
 		return boundResult(request, VerdictApproved), nil
 	})
-	if _, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On}); err != nil {
+	if _, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)}); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(runDir, DirectoryName, FileName)
@@ -227,7 +227,7 @@ func TestStatusRejectsImpossibleLifecycleRecords(t *testing.T) {
 			reviewer := reviewerFunc(func(_ context.Context, request Request, _ string) (Result, error) {
 				return boundResult(request, VerdictApproved), nil
 			})
-			record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On})
+			record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -251,7 +251,7 @@ func TestRunInitialReplayPreservesImmutableEvidence(t *testing.T) {
 	reviewer := reviewerFunc(func(_ context.Context, request Request, _ string) (Result, error) {
 		return boundResult(request, VerdictApproved), nil
 	})
-	options := Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On}
+	options := Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)}
 	if _, err := RunInitial(context.Background(), options); err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func TestRunInitialPersistsProviderAndValidationFailures(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			runDir, _ := reviewFixture(t, consent.Granted)
-			record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: test.reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On})
+			record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: test.reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)})
 			if err == nil || !strings.Contains(err.Error(), test.want) || record.State != StateFailed || !strings.Contains(record.Failure, test.want) {
 				t.Fatalf("record=%#v err=%v", record, err)
 			}
@@ -313,7 +313,7 @@ func TestRunInitialClaimsLifecycleOnce(t *testing.T) {
 		<-release
 		return boundResult(request, VerdictApproved), nil
 	})
-	options := Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: reviewmode.On}
+	options := Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)}
 	var wait sync.WaitGroup
 	wait.Add(1)
 	go func() {
@@ -326,6 +326,79 @@ func TestRunInitialClaimsLifecycleOnce(t *testing.T) {
 	}
 	close(release)
 	wait.Wait()
+}
+
+func fixedMode(mode reviewmode.Mode) func() (reviewmode.Mode, error) {
+	return func() (reviewmode.Mode, error) { return mode, nil }
+}
+
+func TestRunInitialFailsClosedWhenReviewModeIsRevokedDuringProviderExecution(t *testing.T) {
+	runDir, _ := reviewFixture(t, consent.Granted)
+	var calls atomic.Int32
+	live := reviewmode.On
+	check := func() (reviewmode.Mode, error) {
+		current := live
+		live = reviewmode.Off
+		return current, nil
+	}
+	reviewer := reviewerFunc(func(context.Context, Request, string) (Result, error) {
+		calls.Add(1)
+		return Result{}, nil
+	})
+	record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: check})
+	if err == nil || !strings.Contains(err.Error(), "mode") {
+		t.Fatalf("expected review-mode error, got %v", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatal("reviewer ran after review mode authority was revoked")
+	}
+	if record.State != StateFailed {
+		t.Fatalf("expected a failed lifecycle, got %#v", record)
+	}
+	stored, statusErr := Status(runDir)
+	if statusErr != nil || stored == nil || stored.State != StateFailed {
+		t.Fatalf("stored=%#v err=%v", stored, statusErr)
+	}
+}
+
+func TestRunInitialClaimIsAtomicDespiteLeftoverStaging(t *testing.T) {
+	runDir, _ := reviewFixture(t, consent.Granted)
+	// Simulates a process that crashed between staging and publishing a
+	// previous claim attempt: the leftover staging directory must neither
+	// block a fresh claim nor be mistaken for the published review directory.
+	leftover := filepath.Join(runDir, ".review-claim-leftover")
+	if err := os.Mkdir(leftover, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	reviewer := reviewerFunc(func(_ context.Context, request Request, _ string) (Result, error) {
+		return boundResult(request, VerdictApproved), nil
+	})
+	record, err := RunInitial(context.Background(), Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On)})
+	if err != nil {
+		t.Fatalf("run review: %v", err)
+	}
+	if record.State != StateApproved {
+		t.Fatalf("unexpected lifecycle: %#v", record)
+	}
+	reviewDir := filepath.Join(runDir, DirectoryName)
+	if _, err := os.Stat(filepath.Join(reviewDir, FileName)); err != nil {
+		t.Fatalf("published claim missing lifecycle file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(reviewDir, AttemptsDirectory, "1-request.json")); err != nil {
+		t.Fatalf("published claim missing attempts: %v", err)
+	}
+	if _, err := os.Stat(leftover); err != nil {
+		t.Fatalf("unrelated leftover staging directory should be untouched: %v", err)
+	}
+	entries, err := os.ReadDir(runDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".review-claim-") && entry.Name() != ".review-claim-leftover" {
+			t.Fatalf("staging directory %q was not cleaned up after publish", entry.Name())
+		}
+	}
 }
 
 func boundResult(request Request, verdict Verdict) Result {

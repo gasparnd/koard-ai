@@ -133,7 +133,12 @@ type Options struct {
 	RunDir           string
 	Reviewer         Reviewer
 	ReviewerIdentity ReviewerIdentity
-	ReviewMode       reviewmode.Mode
+	// ReviewMode resolves live review-mode authority. RunInitial calls it more
+	// than once per attempt, so it must read current state on every call,
+	// never return a value the caller captured earlier — otherwise a
+	// revocation during claim preparation or a slow provider invocation would
+	// go unnoticed.
+	ReviewMode func() (reviewmode.Mode, error)
 }
 
 // RunInitial claims and executes the first independent review attempt.
@@ -143,6 +148,9 @@ func RunInitial(ctx context.Context, options Options) (Lifecycle, error) {
 	}
 	if err := ctx.Err(); err != nil {
 		return Lifecycle{}, fmt.Errorf("review cancelled before it started: %w", err)
+	}
+	if err := requireReviewModeOn(options.ReviewMode); err != nil {
+		return Lifecycle{}, err
 	}
 	target, decision, err := consent.Status(options.RunDir)
 	if err != nil {
@@ -157,26 +165,25 @@ func RunInitial(ctx context.Context, options Options) (Lifecycle, error) {
 		return Lifecycle{}, fmt.Errorf("verify review snapshot: %w", err)
 	}
 
-	reviewDir := filepath.Join(options.RunDir, DirectoryName)
-	if err := os.Mkdir(reviewDir, 0o755); err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return Lifecycle{}, fmt.Errorf("review lifecycle already exists at %s", reviewDir)
-		}
-		return Lifecycle{}, fmt.Errorf("claim review lifecycle: %w", err)
-	}
-	if err := os.Mkdir(filepath.Join(reviewDir, AttemptsDirectory), 0o755); err != nil {
-		return Lifecycle{}, fmt.Errorf("create review attempts: %w", err)
+	record := Lifecycle{SchemaVersion: CurrentSchemaVersion, Target: target, State: StateReviewing, Attempt: 1, Reviewer: options.ReviewerIdentity, MaxCorrections: MaxCorrections}
+	reviewDir, err := claimReviewDir(options.RunDir, record)
+	if err != nil {
+		return Lifecycle{}, err
 	}
 
-	record := Lifecycle{SchemaVersion: CurrentSchemaVersion, Target: target, State: StateReviewing, Attempt: 1, Reviewer: options.ReviewerIdentity, MaxCorrections: MaxCorrections}
-	if err := writeCurrent(reviewDir, record); err != nil {
-		return record, err
-	}
 	request := Request{SchemaVersion: CurrentSchemaVersion, ID: "review-1", Attempt: 1, Target: target, Reviewer: options.ReviewerIdentity, Capabilities: []string{"repository:read"}, Snapshot: stored.Manifest}
 	if err := validateRequest(request); err != nil {
 		return settleFailure(reviewDir, record, err)
 	}
 	if err := writeOnce(filepath.Join(reviewDir, AttemptsDirectory, "1-request.json"), request); err != nil {
+		return settleFailure(reviewDir, record, err)
+	}
+
+	// Re-checked immediately before handing control to a potentially
+	// long-running provider: the first check only proves authority at claim
+	// time, and a revocation afterward must still be caught before the
+	// reviewer runs.
+	if err := requireReviewModeOn(options.ReviewMode); err != nil {
 		return settleFailure(reviewDir, record, err)
 	}
 
@@ -250,10 +257,67 @@ func validateOptions(options Options) error {
 	if options.Reviewer == nil {
 		return errors.New("reviewer is required")
 	}
-	if options.ReviewMode != reviewmode.On {
-		return errors.New("independent review requires review mode to be on")
+	if options.ReviewMode == nil {
+		return errors.New("review mode check is required")
 	}
 	return validateReviewer(options.ReviewerIdentity)
+}
+
+// requireReviewModeOn resolves live review-mode authority. RunInitial calls
+// it both before the claim and again right before the reviewer runs (see
+// Options.ReviewMode), so authority is held across the whole attempt instead
+// of being proven once and assumed afterward.
+func requireReviewModeOn(check func() (reviewmode.Mode, error)) error {
+	mode, err := check()
+	if err != nil {
+		return fmt.Errorf("resolve review mode: %w", err)
+	}
+	if mode != reviewmode.On {
+		return errors.New("independent review requires review mode to be on")
+	}
+	return nil
+}
+
+// claimReviewDir stages the attempts directory and the initial lifecycle
+// record in a sibling temporary directory, then publishes them with a single
+// atomic rename. A reader or a concurrent claimant therefore only ever
+// observes no review directory or the fully formed one — never attempts/
+// without review.json, or the reverse, which a crash between separate mkdir
+// calls could otherwise leave behind undetected and unrecoverable.
+func claimReviewDir(runDir string, record Lifecycle) (string, error) {
+	reviewDir := filepath.Join(runDir, DirectoryName)
+	if _, err := os.Stat(reviewDir); err == nil {
+		return "", fmt.Errorf("review lifecycle already exists at %s", reviewDir)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("inspect review lifecycle: %w", err)
+	}
+
+	staging, err := os.MkdirTemp(runDir, ".review-claim-*")
+	if err != nil {
+		return "", fmt.Errorf("stage review claim: %w", err)
+	}
+	defer os.RemoveAll(staging)
+	if err := os.Chmod(staging, 0o755); err != nil {
+		return "", fmt.Errorf("stage review claim: %w", err)
+	}
+	if err := os.Mkdir(filepath.Join(staging, AttemptsDirectory), 0o755); err != nil {
+		return "", fmt.Errorf("stage review attempts: %w", err)
+	}
+	if err := writeCurrent(staging, record); err != nil {
+		return "", fmt.Errorf("stage review lifecycle: %w", err)
+	}
+
+	// Two concurrent claimants race this rename, not the earlier Stat: the
+	// loser fails here (the destination is non-empty, so the rename is
+	// rejected rather than silently replacing it) and is reported the same
+	// "already exists" way as the pre-check above.
+	if err := os.Rename(staging, reviewDir); err != nil {
+		if _, statErr := os.Stat(reviewDir); statErr == nil {
+			return "", fmt.Errorf("review lifecycle already exists at %s", reviewDir)
+		}
+		return "", fmt.Errorf("claim review lifecycle: %w", err)
+	}
+	return reviewDir, nil
 }
 
 func validateReviewer(identity ReviewerIdentity) error {

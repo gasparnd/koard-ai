@@ -27,11 +27,13 @@ Keeping these questions separate prevents one broad permission from silently bec
 1. Resolve the completed workflow and its consent record.
 2. Require `granted` consent for the exact workflow, candidate, snapshot, and risk tier.
 3. Recompute the snapshot identity and verify every stored blob.
-4. Atomically claim `.koard/state/runs/<workflow>/review/`.
-5. Persist the immutable request under `review/attempts/1-request.json`.
-6. Invoke a fresh reviewer with only `repository:read`.
-7. Validate the result against the request identity, attempt, target, and snapshot evidence.
-8. Persist the immutable result and update `review/review.json`.
+4. Require that review mode is currently `on`.
+5. Claim `.koard/state/runs/<workflow>/review/`: build `attempts/` and the initial `review.json` in a sibling temporary directory first, then publish both with one atomic rename. A reader or a second claimant only ever sees no review directory or the fully formed one, never one half-written by a crash in between.
+6. Persist the immutable request under `review/attempts/1-request.json`.
+7. Require again that review mode is still `on`, immediately before invoking the reviewer — a revocation during claim preparation, or while a slow provider is starting, must still stop the attempt.
+8. Invoke a fresh reviewer with only `repository:read`.
+9. Validate the result against the request identity, attempt, target, and snapshot evidence.
+10. Persist the immutable result and update `review/review.json`.
 
 The result can approve, reject, or request correction. A correction request pauses the lifecycle. It does not run a corrector and does not change workspace files.
 
@@ -55,17 +57,19 @@ The result can approve, reject, or request correction. A correction request paus
 ## Invariants
 
 - Review starts only after exact granted consent and successful snapshot verification.
+- Review-mode authority is checked live, not once and assumed: it is re-read before the claim and again right before the reviewer runs, so a revocation mid-attempt is never missed.
+- The claim itself is all-or-nothing: `attempts/` and `review.json` are staged together and published with one directory rename, so a crash can never leave a half-claimed lifecycle that blocks every future attempt without explanation.
 - Reviewer identity comes from trusted application configuration, never model output.
 - The reviewer receives only `repository:read`.
 - Findings may cite only URI and digest pairs present in the reviewed snapshot.
 - An approved result cannot contain blocking findings.
-- Concurrent or replayed claims never interleave.
+- Concurrent or replayed claims never interleave: the loser's rename is rejected because the destination is already a complete, non-empty directory, and it is reported the same way as any other already-claimed lifecycle.
 - Review never applies files or authorizes commit, push, pull request, merge, or release.
 - Correction requires a separate immutable user decision and remains proposal-only.
 
 ## Failure behavior
 
-Koard fails closed before provider invocation when consent or snapshot state is absent, declined, malformed, mismatched, or unverifiable. After a lifecycle is claimed, provider failures and invalid results become terminal `failed` records so operators can distinguish “never started” from “started but failed.”
+Koard fails closed before provider invocation when consent, snapshot, or review-mode state is absent, declined, malformed, mismatched, or unverifiable. After a lifecycle is claimed, provider failures, a mid-attempt review-mode revocation, and invalid results all become terminal `failed` records so operators can distinguish “never started” from “started but failed.”
 
 ## Verification
 
