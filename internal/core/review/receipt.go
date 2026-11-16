@@ -133,6 +133,24 @@ func ReceiptStatus(runDir string) (*Receipt, error) {
 		return nil, errors.New("receipt does not match the current approved review lifecycle")
 	}
 
+	// The receipt for attempt 1 was issued for the candidate workflow.json
+	// declared at claim time. workflow.json is not write-once like every
+	// other artifact here (settle replaces it with a plain atomic rename),
+	// so re-resolving it now and requiring an exact match is what actually
+	// catches a candidate going stale: consent.Status already fails closed
+	// whenever the live workflow record no longer matches what was granted
+	// and reviewed. Attempt 2 has no such external record to drift from —
+	// its revised candidate is entirely owned, immutably, by this package.
+	if stored.Attempt == 1 {
+		current, _, err := consent.Status(runDir)
+		if err != nil {
+			return nil, fmt.Errorf("the reviewed candidate is stale: %w", err)
+		}
+		if current != stored.Target {
+			return nil, errors.New("the reviewed candidate is stale: the workflow's current candidate no longer matches the receipted one")
+		}
+	}
+
 	// A receipt for attempt 2 was issued for the revised candidate a granted
 	// correction produced, which lives under the correction snapshot
 	// directory, never the original snapshot the first attempt reviewed.

@@ -9,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/koard-ai/koard/internal/core/agentrouter"
 	"github.com/koard-ai/koard/internal/core/consent"
 	"github.com/koard-ai/koard/internal/core/reviewmode"
+	"github.com/koard-ai/koard/internal/core/risk"
 	"github.com/koard-ai/koard/internal/core/snapshot"
 )
 
@@ -167,6 +169,64 @@ func TestReceiptStatusDetectsCorruptedSnapshot(t *testing.T) {
 
 	if _, err := ReceiptStatus(runDir); err == nil || !strings.Contains(err.Error(), "no longer matches its digest") {
 		t.Fatalf("expected a corrupt-snapshot error, got %v", err)
+	}
+}
+
+func TestReceiptStatusRejectsAStaleCandidateWhenTheWorkflowRecordDrifts(t *testing.T) {
+	runDir := approvedReceiptFixture(t)
+
+	// workflow.json is not write-once like every other artifact in this
+	// package (settle replaces it with a plain atomic rename); simulate it
+	// drifting after the receipt was already issued, with the candidate and
+	// snapshot bytes themselves untouched and still independently valid.
+	path := filepath.Join(runDir, "workflow.json")
+	encoded, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var outcome agentrouter.Outcome
+	if err := json.Unmarshal(encoded, &outcome); err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Risk.Tier == risk.High {
+		outcome.Risk.Tier = risk.Medium
+	} else {
+		outcome.Risk.Tier = risk.High
+	}
+	drifted, err := json.Marshal(outcome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, drifted, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ReceiptStatus(runDir); err == nil || !strings.Contains(err.Error(), "stale") {
+		t.Fatalf("expected a stale-candidate error, got %v", err)
+	}
+}
+
+func TestReceiptStatusSkipsLiveWorkflowCheckForACorrectionReceipt(t *testing.T) {
+	runDir, _ := pausedFixture(t)
+	if _, err := DecideCorrection(runDir, consent.Granted); err != nil {
+		t.Fatal(err)
+	}
+	workspace := workspaceFor(runDir)
+	if err := os.WriteFile(filepath.Join(workspace, "change.go"), []byte("package change\n\n// fixed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	corrector := correctingProposal(workspace)
+	if _, err := RunCorrection(context.Background(), Options{RunDir: runDir, Reviewer: approvingReviewer(t, 2), ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On), Workspace: workspace, Corrector: corrector}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The correction's revised candidate was never declared by workflow.json
+	// — it is owned entirely by this package — so a receipt for attempt 2
+	// must still verify even though consent.Status would resolve to the
+	// original, pre-correction target.
+	receipt, err := ReceiptStatus(runDir)
+	if err != nil || receipt == nil {
+		t.Fatalf("receipt=%#v err=%v", receipt, err)
 	}
 }
 

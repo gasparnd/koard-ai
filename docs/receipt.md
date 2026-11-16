@@ -53,9 +53,18 @@ Sibling to `review.json`, inside `review/` — not at the run-directory root —
 2. A receipt that exists must be structurally valid (schema version, well-formed target, valid reviewer, correction budget in range).
 3. Its `id` must match the SHA-256 digest recomputed from its own content — tamper detection.
 4. Its `target`, `reviewer`, `attempt`, and `corrections_used` must match the lifecycle currently stored at `review.json` — a receipt that no longer matches the lifecycle it was issued for is refused, not silently trusted.
-5. The exact snapshot it names must still load and verify — the original snapshot for attempt 1, the correction snapshot under `review/correction-snapshot/` for attempt 2.
+5. For attempt 1 only: the workflow's candidate must still be exactly what this receipt was issued for — see "Staleness" below.
+6. The exact snapshot it names must still load and verify — the original snapshot for attempt 1, the correction snapshot under `review/correction-snapshot/` for attempt 2.
 
 Any failure at any of these steps fails closed with a specific error; nothing here ever repairs or re-issues a receipt.
+
+## Staleness
+
+Unlike every other artifact this receipt depends on, `workflow.json` is **not** write-once — `agentrouter`'s `settle` replaces it with a plain atomic rename, by design, since a workflow's own record can legitimately need rewriting. That asymmetry is exactly the gap the roadmap calls out: *"the candidate identity binds declared references, not the bytes an immutable snapshot will capture."* A receipt frozen at approval time would otherwise keep attesting to a candidate `workflow.json` no longer actually names, if the workflow record ever drifted afterward (a bug, a manual edit, or a future replay).
+
+`ReceiptStatus` closes this by re-resolving the workflow's *current* candidate through `consent.Status` — the exact same fresh-from-disk resolution `RunInitial` itself used to start the review — and requiring it to still equal the receipt's `target`. `consent.Status` already fails closed whenever the live workflow record no longer matches what was granted and reviewed (its own consent-binding check), so this is reused, not reimplemented. A mismatch, or any error resolving the live record, is reported as the reviewed candidate being **stale**.
+
+This check applies only to attempt 1. A correction's revised candidate (attempt 2) was never declared by `workflow.json` in the first place — it is produced and owned entirely by the review package itself, immutably — so there is no external record for it to drift from.
 
 ## Invariants
 
@@ -75,4 +84,4 @@ go test -race ./internal/core/review
 go test -race ./internal/cli
 ```
 
-Core tests cover: issuance exactly on approval (initial and post-correction), absence on every other terminal state, tamper detection, lifecycle-mismatch detection, and corrupted-snapshot detection. See `independent-review.md` for the review lifecycle this receipt is tied to.
+Core tests cover: issuance exactly on approval (initial and post-correction), absence on every other terminal state, tamper detection, lifecycle-mismatch detection, corrupted-snapshot detection, stale-candidate rejection when `workflow.json` drifts, and that a correction receipt is unaffected by that same drift check. See `independent-review.md` for the review lifecycle this receipt is tied to.
