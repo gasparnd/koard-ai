@@ -97,15 +97,30 @@ func TestReviewRunApprovesAfterGrantedConsent(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run exited with %d: %s", code, stderr)
 	}
-	for _, expected := range []string{"Review state: approved", "attempt: 1", "verdict: approved", "corrections used: 0/1", "mutation and delivery: not authorized"} {
+	for _, expected := range []string{"Review state: approved", "attempt: 1", "verdict: approved", "corrections used: 0/1", "receipt: sha256:", "mutation and delivery: not authorized"} {
 		if !strings.Contains(stdout, expected) {
 			t.Fatalf("run output missing %q: %q", expected, stdout)
 		}
 	}
 
 	statusCode, statusOut, statusErr := fixture.runCmd(t, "status", "--workflow", fixture.workflowID)
-	if statusCode != 0 || !strings.Contains(statusOut, "Review state: approved") {
+	if statusCode != 0 || !strings.Contains(statusOut, "Review state: approved") || !strings.Contains(statusOut, "receipt: sha256:") {
 		t.Fatalf("status code=%d stdout=%q stderr=%q", statusCode, statusOut, statusErr)
+	}
+}
+
+func TestReviewStatusOmitsReceiptForNonApprovedStates(t *testing.T) {
+	fixture := newConsentCLIFixture(t)
+	if code, _, stderr := fixture.run(t, "grant"); code != 0 {
+		t.Fatalf("grant consent: %s", stderr)
+	}
+	stubReviewProviders(t, fakeReviewer(func(_ context.Context, request reviewcore.Request, _ string) (reviewcore.Result, error) {
+		return pausingFakeReviewer(request)
+	}), nil)
+
+	code, stdout, stderr := fixture.runCmd(t, "run", "--workflow", fixture.workflowID)
+	if code != 0 || !strings.Contains(stdout, "correction_required") || strings.Contains(stdout, "receipt:") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 

@@ -41,8 +41,21 @@ func reviewStatus(args []string, cwd string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	printReviewLifecycle(stdout, record)
+	receipt, err := receiptFor(runDir, record)
+	if err != nil {
+		return err
+	}
+	printReviewLifecycle(stdout, record, receipt)
 	return nil
+}
+
+// receiptFor looks up the verifiable receipt only once a lifecycle has
+// actually settled approved; every other state never has one.
+func receiptFor(runDir string, record *reviewcore.Lifecycle) (*reviewcore.Receipt, error) {
+	if record == nil || record.State != reviewcore.StateApproved {
+		return nil, nil
+	}
+	return reviewcore.ReceiptStatus(runDir)
 }
 
 // reviewRun executes only the next authorized bounded transition for one
@@ -100,7 +113,11 @@ func reviewRun(args []string, cwd string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	printReviewLifecycle(stdout, &record)
+	receipt, err := receiptFor(runDir, &record)
+	if err != nil {
+		return err
+	}
+	printReviewLifecycle(stdout, &record, receipt)
 	return nil
 }
 
@@ -168,7 +185,7 @@ func reviewRunDir(args []string, cwd string) (string, error) {
 	return filepath.Join(cwd, ".koard", "state", "runs", workflowID), nil
 }
 
-func printReviewLifecycle(stdout io.Writer, record *reviewcore.Lifecycle) {
+func printReviewLifecycle(stdout io.Writer, record *reviewcore.Lifecycle, receipt *reviewcore.Receipt) {
 	if record == nil {
 		fmt.Fprintln(stdout, "Review state: not started")
 		fmt.Fprintln(stdout, "  mutation and delivery: not authorized")
@@ -188,6 +205,9 @@ func printReviewLifecycle(stdout io.Writer, record *reviewcore.Lifecycle) {
 	}
 	if record.Failure != "" {
 		fmt.Fprintf(stdout, "  failure: %s\n", record.Failure)
+	}
+	if receipt != nil {
+		fmt.Fprintf(stdout, "  receipt: %s\n", receipt.ID)
 	}
 	fmt.Fprintln(stdout, "  mutation and delivery: not authorized")
 }

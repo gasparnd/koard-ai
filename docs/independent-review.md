@@ -22,6 +22,7 @@ Keeping these questions separate prevents one broad permission from silently bec
 | Provider adapter | Runs a fresh reviewer (and, for a correction, a corrector) with read-only capabilities over a materialized snapshot | Core contracts stay portable across runtimes; the live workspace is never what gets inspected |
 | Correction consent | Separately authorizes one proposal-only correction | Review permission never silently becomes correction permission |
 | CLI | Exposes `run`, `status`, `correction` over the exact run directory | The only way a human or script touches this lifecycle |
+| Receipt | Immutable, digest-verifiable proof that a lifecycle reached `approved` | A future layer never has to replay history to answer "was this reviewed?" |
 
 ## Initial review path
 
@@ -51,6 +52,10 @@ A paused, `correction_required` lifecycle stays paused until a **separate** immu
 7. That revised target is independently re-reviewed as attempt 2, with its own immutable `2-request.json` / `2-result.json`, exactly like the first attempt.
 8. Approved or rejected settles the lifecycle. A second `correction_required` verdict **escalates** instead of pausing again — `MaxCorrections` permits exactly one, so no loop is possible, and no second correction-request file is ever written.
 
+## Receipt
+
+The instant — and only the instant — either path above settles `approved`, it issues one immutable, digest-verifiable receipt bound to that exact candidate and verdict. See `receipt.md` for its content, verification, and why it carries no cryptographic signature.
+
 ## Persisted evidence
 
 ```text
@@ -60,6 +65,7 @@ A paused, `correction_required` lifecycle stays paused until a **separate** immu
 ├── snapshot/
 └── review/
     ├── review.json
+    ├── receipt.json                  # only once the lifecycle settles approved
     ├── correction-request.json       # only when correction is requested
     ├── correction-decision.json      # only once a separate decision is recorded
     ├── correction-snapshot/          # only once a granted correction proposes a revision
