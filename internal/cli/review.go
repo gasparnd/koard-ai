@@ -21,11 +21,13 @@ const reviewConsentUsage = "usage: koard review consent <status|grant|decline> -
 const reviewRunUsage = "usage: koard review run --workflow <id>"
 const reviewStatusUsage = "usage: koard review status --workflow <id>"
 const reviewCorrectionUsage = "usage: koard review correction <status|grant|decline> --workflow <id>"
+const reviewApplyUsage = "usage: koard review apply --workflow <id>"
 const reviewUsage = reviewModeUsage +
 	"\n       koard review consent <status|grant|decline> --workflow <id>" +
 	"\n       koard review run --workflow <id>" +
 	"\n       koard review status --workflow <id>" +
-	"\n       koard review correction <status|grant|decline> --workflow <id>"
+	"\n       koard review correction <status|grant|decline> --workflow <id>" +
+	"\n       koard review apply --workflow <id>"
 
 // usageError marks a malformed command line, which exits with code 2.
 type usageError struct{ message string }
@@ -50,6 +52,8 @@ func runReview(args []string, cwd string, stdout, stderr io.Writer) int {
 					usageText = reviewStatusUsage
 				case "correction":
 					usageText = reviewCorrectionUsage
+				case "apply":
+					usageText = reviewApplyUsage
 				}
 			}
 			fmt.Fprintln(stderr, usageText)
@@ -75,6 +79,8 @@ func review(args []string, cwd string, stdout io.Writer) error {
 		return reviewStatus(args[1:], cwd, stdout)
 	case "correction":
 		return reviewCorrection(args[1:], cwd, stdout)
+	case "apply":
+		return reviewApply(args[1:], cwd, stdout)
 	default:
 		return usageError{fmt.Sprintf("unknown review subcommand %q", args[0])}
 	}

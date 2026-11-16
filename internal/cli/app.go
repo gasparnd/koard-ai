@@ -139,6 +139,8 @@ Commands:
              Show the independent-review lifecycle for one workflow
   review correction <status|grant|decline> --workflow <id>
              Show or record the separate decision for one correction request
+  review apply --workflow <id>
+             Apply the exact receipted candidate snapshot to the workspace
   version    Print the CLI version
   help       Show this help`)
 }

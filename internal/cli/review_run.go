@@ -9,6 +9,7 @@ import (
 
 	"github.com/koard-ai/koard/internal/adapters/opencode"
 	"github.com/koard-ai/koard/internal/core/agentrouter"
+	applycore "github.com/koard-ai/koard/internal/core/apply"
 	"github.com/koard-ai/koard/internal/core/consent"
 	reviewcore "github.com/koard-ai/koard/internal/core/review"
 	"github.com/koard-ai/koard/internal/core/reviewmode"
@@ -45,7 +46,11 @@ func reviewStatus(args []string, cwd string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	printReviewLifecycle(stdout, record, receipt)
+	applied, err := applyFor(runDir, receipt)
+	if err != nil {
+		return err
+	}
+	printReviewLifecycle(stdout, record, receipt, applied)
 	return nil
 }
 
@@ -56,6 +61,15 @@ func receiptFor(runDir string, record *reviewcore.Lifecycle) (*reviewcore.Receip
 		return nil, nil
 	}
 	return reviewcore.ReceiptStatus(runDir)
+}
+
+// applyFor looks up the apply completion record only once a receipt exists
+// to apply in the first place.
+func applyFor(runDir string, receipt *reviewcore.Receipt) (*applycore.Record, error) {
+	if receipt == nil {
+		return nil, nil
+	}
+	return applycore.Status(runDir)
 }
 
 // reviewRun executes only the next authorized bounded transition for one
@@ -117,7 +131,29 @@ func reviewRun(args []string, cwd string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	printReviewLifecycle(stdout, &record, receipt)
+	applied, err := applyFor(runDir, receipt)
+	if err != nil {
+		return err
+	}
+	printReviewLifecycle(stdout, &record, receipt, applied)
+	return nil
+}
+
+// reviewApply writes the exact receipted, non-stale candidate snapshot to
+// the real workspace. A valid, verified receipt is the only authority it
+// requires — the same authority already granted through consent, review,
+// and any correction decision. It never invokes git and never authorizes
+// commit, push, pull request, merge, or release.
+func reviewApply(args []string, cwd string, stdout io.Writer) error {
+	runDir, err := reviewRunDir(args, cwd)
+	if err != nil {
+		return err
+	}
+	record, err := applycore.Apply(runDir, cwd)
+	if err != nil {
+		return err
+	}
+	printApplyRecord(stdout, record)
 	return nil
 }
 
@@ -185,7 +221,7 @@ func reviewRunDir(args []string, cwd string) (string, error) {
 	return filepath.Join(cwd, ".koard", "state", "runs", workflowID), nil
 }
 
-func printReviewLifecycle(stdout io.Writer, record *reviewcore.Lifecycle, receipt *reviewcore.Receipt) {
+func printReviewLifecycle(stdout io.Writer, record *reviewcore.Lifecycle, receipt *reviewcore.Receipt, applied *applycore.Record) {
 	if record == nil {
 		fmt.Fprintln(stdout, "Review state: not started")
 		fmt.Fprintln(stdout, "  mutation and delivery: not authorized")
@@ -209,7 +245,21 @@ func printReviewLifecycle(stdout io.Writer, record *reviewcore.Lifecycle, receip
 	if receipt != nil {
 		fmt.Fprintf(stdout, "  receipt: %s\n", receipt.ID)
 	}
-	fmt.Fprintln(stdout, "  mutation and delivery: not authorized")
+	if applied != nil {
+		fmt.Fprintf(stdout, "  apply: %s\n", applied.State)
+		fmt.Fprintln(stdout, "  delivery (commit, push, pull request, merge, release): not authorized")
+	} else {
+		fmt.Fprintln(stdout, "  mutation and delivery: not authorized")
+	}
+}
+
+func printApplyRecord(stdout io.Writer, record applycore.Record) {
+	fmt.Fprintf(stdout, "Apply: %s\n", record.State)
+	fmt.Fprintf(stdout, "  workflow: %s\n", record.Target.WorkflowID)
+	fmt.Fprintf(stdout, "  candidate: %s\n", record.Target.CandidateID)
+	fmt.Fprintf(stdout, "  snapshot: %s\n", record.Target.SnapshotID)
+	fmt.Fprintln(stdout, "  mutation: workspace files written")
+	fmt.Fprintln(stdout, "  delivery (commit, push, pull request, merge, release): not authorized")
 }
 
 func printCorrectionDecision(stdout io.Writer, decision *reviewcore.CorrectionDecision) {

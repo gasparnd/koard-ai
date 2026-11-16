@@ -14,6 +14,19 @@ import (
 
 const ReceiptFileName = "receipt.json"
 
+// SnapshotDirectory returns where the exact candidate bytes for one attempt
+// are stored: the original capture under runDir for attempt 1, the
+// correction capture under review/correction-snapshot/ for attempt 2.
+// Exported so a caller outside this package — controlled mutation applying
+// a receipted candidate, for instance — locates the same bytes a receipt
+// was issued for without re-deriving this branch a third time.
+func SnapshotDirectory(runDir string, attempt int) string {
+	if attempt > 1 {
+		return filepath.Join(runDir, DirectoryName, CorrectionSnapshotDirectory)
+	}
+	return filepath.Join(runDir, "snapshot")
+}
+
 // Receipt is immutable, verifiable proof that one exact candidate snapshot
 // completed the independent-review path: granted consent, this lifecycle's
 // approved verdict, and the correction budget it spent. It is issued
@@ -154,11 +167,7 @@ func ReceiptStatus(runDir string) (*Receipt, error) {
 	// A receipt for attempt 2 was issued for the revised candidate a granted
 	// correction produced, which lives under the correction snapshot
 	// directory, never the original snapshot the first attempt reviewed.
-	snapshotDir := filepath.Join(runDir, "snapshot")
-	if stored.Attempt > 1 {
-		snapshotDir = filepath.Join(reviewDir, CorrectionSnapshotDirectory)
-	}
-	if _, err := snapshot.Load(snapshotDir, stored.Target.SnapshotID); err != nil {
+	if _, err := snapshot.Load(SnapshotDirectory(runDir, stored.Attempt), stored.Target.SnapshotID); err != nil {
 		return nil, fmt.Errorf("verify receipt snapshot: %w", err)
 	}
 	return &stored, nil
