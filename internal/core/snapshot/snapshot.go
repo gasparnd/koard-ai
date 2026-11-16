@@ -76,7 +76,7 @@ func Capture(ctx context.Context, workspace, dir, candidateID string, artifacts 
 	if strings.TrimSpace(candidateID) == "" {
 		return Snapshot{}, errors.New("snapshot requires a candidate identity")
 	}
-	root, err := realWorkspace(workspace)
+	root, err := RealWorkspace(workspace)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -169,19 +169,15 @@ func Load(dir, id string) (Snapshot, error) {
 // which may already have drifted.
 func Materialize(snapshotDir, dir string, manifest Manifest) error {
 	for _, entry := range manifest.Entries {
-		if !strings.HasPrefix(entry.URI, RepoScheme) {
-			return fmt.Errorf("only %s artifacts can be materialized", RepoScheme)
-		}
-		relative := strings.TrimPrefix(entry.URI, RepoScheme)
-		if relative == "" || strings.Contains(relative, `\`) || path.IsAbs(relative) ||
-			path.Clean(relative) != relative || !filepath.IsLocal(filepath.FromSlash(relative)) {
-			return errors.New("path must be a canonical relative path inside the workspace")
+		relative, err := CanonicalRelativePath(entry.URI)
+		if err != nil {
+			return err
 		}
 		content, err := ReadEntry(snapshotDir, entry)
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(dir, filepath.FromSlash(relative))
+		target := filepath.Join(dir, relative)
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return fmt.Errorf("create materialized directory: %w", err)
 		}
@@ -190,6 +186,26 @@ func Materialize(snapshotDir, dir string, manifest Manifest) error {
 		}
 	}
 	return nil
+}
+
+// CanonicalRelativePath validates that uri names a repo:// artifact by a
+// canonical, relative, local path, and returns that path with OS
+// separators. Every caller that turns a manifest entry back into a real
+// file on disk — reading it from a workspace, materializing a reviewer's
+// tree, or applying an approved candidate — shares this one check instead
+// of re-deriving it, since the consequence of getting it wrong only grows
+// as those callers go from a disposable temp directory to the real,
+// permanent workspace.
+func CanonicalRelativePath(uri string) (string, error) {
+	if !strings.HasPrefix(uri, RepoScheme) {
+		return "", fmt.Errorf("only %s artifacts are supported", RepoScheme)
+	}
+	relative := strings.TrimPrefix(uri, RepoScheme)
+	if relative == "" || strings.Contains(relative, `\`) || path.IsAbs(relative) ||
+		path.Clean(relative) != relative || !filepath.IsLocal(filepath.FromSlash(relative)) {
+		return "", errors.New("path must be a canonical relative path inside the workspace")
+	}
+	return filepath.FromSlash(relative), nil
 }
 
 // ReadEntry returns the stored bytes of one entry after checking that they
@@ -208,7 +224,11 @@ func ReadEntry(dir string, entry Entry) ([]byte, error) {
 	return content, nil
 }
 
-func realWorkspace(workspace string) (string, error) {
+// RealWorkspace resolves workspace to an absolute, symlink-resolved
+// directory, failing if it does not exist or is not a directory. Exported
+// so every caller that must root a path inside a real workspace — capturing
+// a candidate, or applying one — shares this one resolution.
+func RealWorkspace(workspace string) (string, error) {
 	absolute, err := filepath.Abs(workspace)
 	if err != nil {
 		return "", fmt.Errorf("resolve workspace: %w", err)
@@ -233,16 +253,12 @@ func readArtifact(root string, artifact handoff.Reference) ([]byte, error) {
 	if artifact.Digest != "" && !digestPattern.MatchString(artifact.Digest) {
 		return nil, fmt.Errorf("declared digest %q is not a sha256 digest", artifact.Digest)
 	}
-	if !strings.HasPrefix(artifact.URI, RepoScheme) {
-		return nil, fmt.Errorf("only %s artifacts can be captured", RepoScheme)
-	}
-	relative := strings.TrimPrefix(artifact.URI, RepoScheme)
-	if relative == "" || strings.Contains(relative, `\`) || path.IsAbs(relative) ||
-		path.Clean(relative) != relative || !filepath.IsLocal(filepath.FromSlash(relative)) {
-		return nil, errors.New("path must be a canonical relative path inside the workspace")
+	relative, err := CanonicalRelativePath(artifact.URI)
+	if err != nil {
+		return nil, err
 	}
 
-	resolved, err := filepath.EvalSymlinks(filepath.Join(root, filepath.FromSlash(relative)))
+	resolved, err := filepath.EvalSymlinks(filepath.Join(root, relative))
 	if err != nil {
 		return nil, fmt.Errorf("resolve path: %w", err)
 	}

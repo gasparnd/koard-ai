@@ -30,6 +30,7 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | `configuration.md` | Current configuration schema and validation rules |
 | `consent.md` | Candidate-bound consent for independent review |
 | `contributing.md` | Development workflow and checks |
+| `controlled-mutation.md` | The first real workspace-write capability: applying a receipted candidate |
 | `events.md` | Structured workflow events and diagnostics |
 | `independent-review.md` | Layer-by-layer guide to exact, read-only candidate review |
 | `handoffs.md` | Versioned request and result contracts between roles |

@@ -110,6 +110,52 @@ func TestReviewRunApprovesAfterGrantedConsent(t *testing.T) {
 	}
 }
 
+func TestReviewApplyRequiresAVerifiedReceipt(t *testing.T) {
+	fixture := newConsentCLIFixture(t)
+	before, err := os.ReadFile(fixture.artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	code, stdout, stderr := fixture.runCmd(t, "apply", "--workflow", fixture.workflowID)
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "receipt") {
+		t.Fatalf("code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	after, err := os.ReadFile(fixture.artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("a refused apply wrote to the workspace")
+	}
+}
+
+func TestReviewApplyWritesTheReceiptedCandidateAndReportsInStatus(t *testing.T) {
+	fixture := newConsentCLIFixture(t)
+	if code, _, stderr := fixture.run(t, "grant"); code != 0 {
+		t.Fatalf("grant consent: %s", stderr)
+	}
+	stubReviewProviders(t, approvingFakeReviewer(t, 1), nil)
+	if code, _, stderr := fixture.runCmd(t, "run", "--workflow", fixture.workflowID); code != 0 {
+		t.Fatalf("run: %s", stderr)
+	}
+
+	code, stdout, stderr := fixture.runCmd(t, "apply", "--workflow", fixture.workflowID)
+	if code != 0 {
+		t.Fatalf("apply exited with %d: %s", code, stderr)
+	}
+	for _, expected := range []string{"Apply: applied", "workflow: " + fixture.workflowID, "delivery (commit, push, pull request, merge, release): not authorized"} {
+		if !strings.Contains(stdout, expected) {
+			t.Fatalf("apply output missing %q: %q", expected, stdout)
+		}
+	}
+
+	statusCode, statusOut, statusErr := fixture.runCmd(t, "status", "--workflow", fixture.workflowID)
+	if statusCode != 0 || !strings.Contains(statusOut, "apply: applied") {
+		t.Fatalf("status code=%d stdout=%q stderr=%q", statusCode, statusOut, statusErr)
+	}
+}
+
 func TestReviewStatusOmitsReceiptForNonApprovedStates(t *testing.T) {
 	fixture := newConsentCLIFixture(t)
 	if code, _, stderr := fixture.run(t, "grant"); code != 0 {
@@ -308,8 +354,10 @@ func TestReviewRunRejectsMissingWorkflowAndUsageErrors(t *testing.T) {
 		{"review", "run"},
 		{"review", "status"},
 		{"review", "correction"},
+		{"review", "apply"},
 		{"review", "correction", "approve", "--workflow", fixture.workflowID},
 		{"review", "run", "--workflow", fixture.workflowID, "extra"},
+		{"review", "apply", "--workflow", fixture.workflowID, "extra"},
 	} {
 		var stderr bytes.Buffer
 		if code := Run(args, fixture.project, &bytes.Buffer{}, &stderr); code != 2 || stderr.Len() == 0 {
@@ -324,7 +372,7 @@ func TestHelpListsReviewRunStatusCorrection(t *testing.T) {
 	if code := Run([]string{"help"}, t.TempDir(), &stdout, &bytes.Buffer{}); code != 0 {
 		t.Fatalf("help exited with %d", code)
 	}
-	for _, expected := range []string{"review run", "review status", "review correction"} {
+	for _, expected := range []string{"review run", "review status", "review correction", "review apply"} {
 		if !strings.Contains(stdout.String(), expected) {
 			t.Fatalf("help does not list %q: %q", expected, stdout.String())
 		}

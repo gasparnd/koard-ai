@@ -20,7 +20,7 @@ Koard grows through executable vertical slices. Planned functionality is documen
 
 ## Governed orchestration
 
-Koard will build one real but non-mutating orchestration path before RDD. RDD will then govern the concrete candidate produced by that path before any workspace mutation is enabled.
+Koard built one real but non-mutating orchestration path first, then governed the concrete candidate it produces through receipt-driven development, before finally enabling the one workspace-write path that exists: applying an exact, receipted candidate. Delivery (commit, push, pull request, merge, release) remains outside this authority entirely — orchestration expansion, below, is what remains.
 
 ### 1. Non-mutating walking skeleton
 
@@ -46,10 +46,10 @@ Replay, idempotency, and recovery after the Koard process dies move to controlle
 
 ### 3. Controlled mutation
 
-- [ ] Apply only the exact candidate snapshot that completed the required RDD path.
-- [ ] Handle partial writes, interruption, and recovery deterministically.
-- [ ] Keep commit, push, pull request, merge, and release outside receipt authority.
-- [ ] Verify replay, idempotency, and recovery when the Koard process dies mid-run.
+- [x] Apply only the exact candidate snapshot that completed the required RDD path.
+- [x] Handle partial writes, interruption, and recovery deterministically.
+- [x] Keep commit, push, pull request, merge, and release outside receipt authority.
+- [x] Verify replay, idempotency, and recovery when the Koard process dies mid-run.
 
 ### 4. Orchestration expansion
 
