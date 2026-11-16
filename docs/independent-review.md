@@ -24,6 +24,19 @@ Keeping these questions separate prevents one broad permission from silently bec
 | CLI | Exposes `run`, `status`, `correction` over the exact run directory | The only way a human or script touches this lifecycle |
 | Receipt | Immutable, digest-verifiable proof that a lifecycle reached `approved` | A future layer never has to replay history to answer "was this reviewed?" |
 
+## Verification matrix
+
+The roadmap asks to "verify snapshot integrity, reviewer independence, consent binding, and correction limits." All four already exist as concrete checks spread across this layer and `receipt.md`; this table is the map so nobody has to rediscover them:
+
+| Property | Where it is actually checked | What a gap would look like |
+|---|---|---|
+| Snapshot integrity | `snapshot.Load`/`ReadEntry` re-verify every blob's digest on every read; `ReceiptStatus` calls `Load` on the exact target snapshot (the original for attempt 1, `review/correction-snapshot/` for attempt 2) | A corrupted blob would be accepted silently — tested by `TestRunInitialRejectsCorruptSnapshotBeforeClaim`, `TestReceiptStatusDetectsCorruptedSnapshot`, `TestReceiptStatusDetectsCorruptedCorrectionSnapshot` |
+| Reviewer independence | `handoff`/`review.Result` have no `reviewer` field at all — the model cannot report its own identity; `ReviewerIdentity` only ever comes from trusted `Options`; every OpenCode invocation is `--standalone --archived` with no continuation flag | A provider claiming its own identity, or two attempts silently sharing one session, would be accepted — tested by `TestAdapterBuildsProposalOnlyInvocation` and `TestAdapterReviewMaterializesSnapshotReturnsBoundResultAndCleansUp`'s forbidden-flag assertions |
+| Consent binding | `consent.Status` fails closed whenever the live `workflow.json` no longer matches a granted decision; `RunInitial` requires exactly that before claiming; `ReceiptStatus` re-runs the same check for attempt 1 (see "Staleness" in `receipt.md`) | An approved receipt surviving a workflow record that no longer matches it — tested by the consent suite and `TestReceiptStatusRejectsAStaleCandidateWhenTheWorkflowRecordDrifts` |
+| Correction limits | `MaxCorrections = 1`; `validateLifecycle` bounds `Attempt` to `1..MaxCorrections+1`; a second `correction_required` escalates instead of pausing; both `RunCorrection` and `DecideCorrection` refuse once the lifecycle is no longer `correction_required` | A third attempt running, or a second correction decision being recorded, after escalation — tested by `TestRunCorrectionEscalatesOnSecondCorrectionRequired`, `TestRunCorrectionRefusesAThirdAttemptAfterEscalation`, `TestDecideCorrectionRefusesAfterEscalation` |
+
+Nothing new was built for this: every row already existed as a consequence of the review and receipt lifecycle's own fail-closed design. The work was confirming each property has a direct, named test, and closing the three that did not (correction-snapshot integrity, the review path's forbidden-flag assertion, and refusal after escalation).
+
 ## Initial review path
 
 1. Resolve the completed workflow and its consent record.

@@ -230,6 +230,39 @@ func TestReceiptStatusSkipsLiveWorkflowCheckForACorrectionReceipt(t *testing.T) 
 	}
 }
 
+func TestReceiptStatusDetectsCorruptedCorrectionSnapshot(t *testing.T) {
+	runDir, _ := pausedFixture(t)
+	if _, err := DecideCorrection(runDir, consent.Granted); err != nil {
+		t.Fatal(err)
+	}
+	workspace := workspaceFor(runDir)
+	if err := os.WriteFile(filepath.Join(workspace, "change.go"), []byte("package change\n\n// fixed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	corrector := correctingProposal(workspace)
+	record, err := RunCorrection(context.Background(), Options{RunDir: runDir, Reviewer: approvingReviewer(t, 2), ReviewerIdentity: ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: fixedMode(reviewmode.On), Workspace: workspace, Corrector: corrector})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	correctionSnapshotDir := filepath.Join(runDir, DirectoryName, CorrectionSnapshotDirectory)
+	stored, err := snapshot.Load(correctionSnapshotDir, record.Target.SnapshotID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob := filepath.Join(correctionSnapshotDir, "blobs", "sha256", strings.TrimPrefix(stored.Manifest.Entries[0].Digest, "sha256:"))
+	if err := os.Chmod(blob, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blob, []byte("corrupt"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ReceiptStatus(runDir); err == nil || !strings.Contains(err.Error(), "no longer matches its digest") {
+		t.Fatalf("expected a corrupt-snapshot error, got %v", err)
+	}
+}
+
 func approvedReceiptFixture(t *testing.T) string {
 	t.Helper()
 	runDir, _ := reviewFixture(t, consent.Granted)

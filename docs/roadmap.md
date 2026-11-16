@@ -42,7 +42,7 @@ Replay, idempotency, and recovery after the Koard process dies move to controlle
 - [x] Independent review with a bounded correction lifecycle.
 - [x] Verifiable receipt tied to the reviewed candidate.
 - [x] Reject a stale candidate whose snapshot no longer matches the reviewed one.
-- [ ] Verify snapshot integrity, reviewer independence, consent binding, and correction limits.
+- [x] Verify snapshot integrity, reviewer independence, consent binding, and correction limits.
 
 ### 3. Controlled mutation
 
