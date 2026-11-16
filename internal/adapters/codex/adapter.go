@@ -142,7 +142,11 @@ func (adapter *Adapter) Propose(ctx context.Context, request handoff.Request) (h
 // Review performs a read-only Codex run over the exact snapshot being
 // reviewed — materialized into a disposable directory, never the live
 // workspace, which may already have drifted from what was consented to — and
-// returns exactly one result bound to the supplied request.
+// returns exactly one strictly decoded result. Binding that result to the
+// request (schema version, request id, attempt, target, verdict) is
+// review.validateResultFor's job in the core, not the adapter's: the adapter
+// never certifies its own identity or authority, and the review core rejects
+// any result whose binding does not match before it becomes lifecycle state.
 func (adapter *Adapter) Review(ctx context.Context, request review.Request, snapshotDir string) (review.Result, error) {
 	if err := validateReviewRequest(request); err != nil {
 		return review.Result{}, err
@@ -297,7 +301,7 @@ func (adapter *Adapter) checkVersion(ctx context.Context) error {
 		return err
 	}
 	if versionBefore(major, minor, patch, minimumMajor, minimumMinor, minimumPatch) {
-		return fmt.Errorf("Codex %d.%d.%d is unsupported; this adapter requires 0.149.0 or newer", major, minor, patch)
+		return fmt.Errorf("Codex %d.%d.%d is unsupported; this adapter requires %d.%d.%d or newer", major, minor, patch, minimumMajor, minimumMinor, minimumPatch)
 	}
 	return nil
 }
@@ -328,8 +332,9 @@ func versionBefore(major, minor, patch, requiredMajor, requiredMinor, requiredPa
 	return patch < requiredPatch
 }
 
-// commandFailure carries the parts of a failed process that a caller needs to
-// build one useful error, so the version check and the prompt run share it.
+// commandError prefixes one failed process with the action that failed and
+// keeps the provider's stderr, so the operator reads the real cause instead of
+// a bare exit status.
 func commandError(action string, result commandResult) error {
 	message := strings.TrimSpace(string(result.stderr))
 	if message == "" {

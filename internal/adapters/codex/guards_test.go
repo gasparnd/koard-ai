@@ -28,12 +28,7 @@ func TestExactArgvForPromptRun(t *testing.T) {
 
 	args := runner.commands[1].Args
 	out := flagValue(t, args, "--output-last-message")
-	expected := []string{
-		"exec", "--ephemeral", "--ignore-user-config", "--ignore-rules",
-		"--skip-git-repo-check", "-s", "read-only", "--color", "never",
-		"-C", adapter.workspace, "-m", "openai/test-model",
-		"--output-last-message", out,
-	}
+	expected := expectedPromptArguments(adapter.workspace, "openai/test-model", out)
 	if len(args) != len(expected)+1 {
 		t.Fatalf("argc=%d want %d: %q", len(args), len(expected)+1, args)
 	}
@@ -79,13 +74,30 @@ func TestModelCannotAddArguments(t *testing.T) {
 	}
 
 	args := runner.commands[1].Args
-	if len(args) != 16 {
-		t.Fatalf("argument count changed: %d %q", len(args), args)
+	expected := expectedPromptArguments(adapter.workspace, adapter.model, flagValue(t, args, "--output-last-message"))
+	if len(args) != len(expected)+1 {
+		t.Fatalf("argument count changed: %d, want %d: %q", len(args), len(expected)+1, args)
+	}
+	for index, arg := range args[:len(expected)] {
+		if arg != expected[index] {
+			t.Fatalf("arg[%d]=%q want %q", index, arg, expected[index])
+		}
 	}
 	for index, arg := range args {
 		if arg == "-m" && args[index+1] != adapter.model {
 			t.Fatalf("model was rewritten: %q", args[index+1])
 		}
+	}
+}
+
+// expectedPromptArguments is the fixed surface a prompt run must use, written
+// once so both guards pin the same list instead of a bare argument count.
+func expectedPromptArguments(workspace, model, outputPath string) []string {
+	return []string{
+		"exec", "--ephemeral", "--ignore-user-config", "--ignore-rules",
+		"--skip-git-repo-check", "-s", "read-only", "--color", "never",
+		"-C", workspace, "-m", model,
+		"--output-last-message", outputPath,
 	}
 }
 
