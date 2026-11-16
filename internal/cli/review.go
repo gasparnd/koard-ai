@@ -18,7 +18,14 @@ const reviewMutationLock = ".review-mutation.lock"
 
 const reviewModeUsage = "usage: koard review mode <status|enable|disable> [--scope clone|global]"
 const reviewConsentUsage = "usage: koard review consent <status|grant|decline> --workflow <id>"
-const reviewUsage = reviewModeUsage + "\n       koard review consent <status|grant|decline> --workflow <id>"
+const reviewRunUsage = "usage: koard review run --workflow <id>"
+const reviewStatusUsage = "usage: koard review status --workflow <id>"
+const reviewCorrectionUsage = "usage: koard review correction <status|grant|decline> --workflow <id>"
+const reviewUsage = reviewModeUsage +
+	"\n       koard review consent <status|grant|decline> --workflow <id>" +
+	"\n       koard review run --workflow <id>" +
+	"\n       koard review status --workflow <id>" +
+	"\n       koard review correction <status|grant|decline> --workflow <id>"
 
 // usageError marks a malformed command line, which exits with code 2.
 type usageError struct{ message string }
@@ -37,6 +44,12 @@ func runReview(args []string, cwd string, stdout, stderr io.Writer) int {
 					usageText = reviewModeUsage
 				case "consent":
 					usageText = reviewConsentUsage
+				case "run":
+					usageText = reviewRunUsage
+				case "status":
+					usageText = reviewStatusUsage
+				case "correction":
+					usageText = reviewCorrectionUsage
 				}
 			}
 			fmt.Fprintln(stderr, usageText)
@@ -56,6 +69,12 @@ func review(args []string, cwd string, stdout io.Writer) error {
 		return reviewMode(args[1:], cwd, stdout)
 	case "consent":
 		return reviewConsent(args[1:], cwd, stdout)
+	case "run":
+		return reviewRun(args[1:], cwd, stdout)
+	case "status":
+		return reviewStatus(args[1:], cwd, stdout)
+	case "correction":
+		return reviewCorrection(args[1:], cwd, stdout)
 	default:
 		return usageError{fmt.Sprintf("unknown review subcommand %q", args[0])}
 	}

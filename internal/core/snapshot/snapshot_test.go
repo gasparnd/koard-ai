@@ -380,3 +380,70 @@ func TestCaptureStopsWhenCancelled(t *testing.T) {
 		t.Fatal("a cancelled capture wrote to the snapshot directory")
 	}
 }
+
+func TestMaterializeReconstructsTheExactCapturedTree(t *testing.T) {
+	workspace := t.TempDir()
+	writeFile(t, workspace, "internal/a.go", "package a\n")
+	writeFile(t, workspace, "docs/b.md", "# b\n")
+
+	dir := filepath.Join(t.TempDir(), "snapshot")
+	snap, err := Capture(context.Background(), workspace, dir, candidateID, []handoff.Reference{repo("internal/a.go"), repo("docs/b.md")})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	materialized := t.TempDir()
+	if err := Materialize(dir, materialized, snap.Manifest); err != nil {
+		t.Fatalf("materialize: %v", err)
+	}
+	for _, entry := range []struct{ path, content string }{
+		{"internal/a.go", "package a\n"},
+		{"docs/b.md", "# b\n"},
+	} {
+		content, err := os.ReadFile(filepath.Join(materialized, filepath.FromSlash(entry.path)))
+		if err != nil {
+			t.Fatalf("read materialized %s: %v", entry.path, err)
+		}
+		if string(content) != entry.content {
+			t.Fatalf("materialized %s = %q, want %q", entry.path, content, entry.content)
+		}
+	}
+}
+
+func TestMaterializeRefusesAnUnsafePath(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "snapshot")
+	manifest := Manifest{SchemaVersion: CurrentSchemaVersion, CandidateID: candidateID, Entries: []Entry{{Kind: "source", URI: "repo://../escape.go", Digest: digest("x"), Size: 1}}}
+
+	materialized := t.TempDir()
+	if err := Materialize(dir, materialized, manifest); err == nil || !strings.Contains(err.Error(), "canonical relative path") {
+		t.Fatalf("expected an unsafe-path error, got %v", err)
+	}
+	entries, err := os.ReadDir(materialized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("unsafe materialize wrote into the destination: %v", entries)
+	}
+}
+
+func TestMaterializeRejectsTamperedBlobs(t *testing.T) {
+	workspace := t.TempDir()
+	writeFile(t, workspace, "a.go", "content")
+	dir := filepath.Join(t.TempDir(), "snapshot")
+	snap, err := Capture(context.Background(), workspace, dir, candidateID, []handoff.Reference{repo("a.go")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob := blobPath(dir, snap.Manifest.Entries[0].Digest)
+	if err := os.Chmod(blob, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blob, []byte("tampered"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Materialize(dir, t.TempDir(), snap.Manifest); err == nil || !strings.Contains(err.Error(), "no longer matches its digest") {
+		t.Fatalf("expected a digest mismatch error, got %v", err)
+	}
+}

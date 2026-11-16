@@ -3,8 +3,10 @@ package opencode
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +16,8 @@ import (
 
 	"github.com/koard-ai/koard/internal/core/handoff"
 	"github.com/koard-ai/koard/internal/core/mutation"
+	"github.com/koard-ai/koard/internal/core/review"
+	"github.com/koard-ai/koard/internal/core/snapshot"
 )
 
 const (
@@ -144,6 +148,90 @@ func (adapter *Adapter) Propose(ctx context.Context, request handoff.Request) (h
 	}
 
 	return decoded, nil
+}
+
+// Review performs a read-only OpenCode run over the exact snapshot being
+// reviewed — materialized into a disposable directory, never the live
+// workspace, which may already have drifted from what was consented to —
+// and returns exactly one result bound to the supplied request.
+func (adapter *Adapter) Review(ctx context.Context, request review.Request, snapshotDir string) (review.Result, error) {
+	if err := validateReviewRequest(request); err != nil {
+		return review.Result{}, err
+	}
+	if err := adapter.checkVersion(ctx); err != nil {
+		return review.Result{}, err
+	}
+
+	materialized, err := os.MkdirTemp("", "koard-review-*")
+	if err != nil {
+		return review.Result{}, fmt.Errorf("stage review materialization: %w", err)
+	}
+	defer os.RemoveAll(materialized)
+	if err := snapshot.Materialize(snapshotDir, materialized, request.Snapshot); err != nil {
+		return review.Result{}, fmt.Errorf("materialize reviewed snapshot: %w", err)
+	}
+
+	encoded, err := json.MarshalIndent(request, "", "  ")
+	if err != nil {
+		return review.Result{}, fmt.Errorf("marshal review request: %w", err)
+	}
+	prompt := reviewPrompt(string(encoded))
+	arguments := []string{
+		"run",
+		"--standalone",
+		"--archived",
+		"--model", adapter.model,
+	}
+	if adapter.agent != "" {
+		arguments = append(arguments, "--agent", adapter.agent)
+	}
+	arguments = append(arguments, prompt)
+
+	result := adapter.runner.Run(ctx, command{
+		Name: adapter.executable,
+		Args: arguments,
+		Dir:  materialized,
+		Env:  []string{"OPENCODE_CONFIG_CONTENT=" + proposalPolicy},
+	})
+	if result.err != nil {
+		return review.Result{}, commandError("run OpenCode review", result)
+	}
+
+	decoded, err := decodeReviewResult(result.stdout)
+	if err != nil {
+		return review.Result{}, fmt.Errorf("decode OpenCode review result: %w", err)
+	}
+	return decoded, nil
+}
+
+func validateReviewRequest(request review.Request) error {
+	if err := mutation.RequireReadOnly(request.Capabilities); err != nil {
+		return fmt.Errorf("review request rejected: %w", err)
+	}
+	return nil
+}
+
+func decodeReviewResult(encoded []byte) (review.Result, error) {
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	var result review.Result
+	if err := decoder.Decode(&result); err != nil {
+		return review.Result{}, err
+	}
+	if _, err := decoder.Token(); err != nil && !errors.Is(err, io.EOF) {
+		return review.Result{}, fmt.Errorf("decode trailing data: %w", err)
+	} else if err == nil {
+		return review.Result{}, errors.New("multiple JSON values are not supported")
+	}
+	return result, nil
+}
+
+func reviewPrompt(request string) string {
+	return "Independently review the exact snapshot materialized at the current working directory. " +
+		"Do not modify files or perform delivery operations. Cite findings only against the artifacts " +
+		"and digests named in the review request. Return exactly one JSON object that satisfies the " +
+		"requested review result schema, with no markdown fence or commentary.\n\n" +
+		"Review request:\n" + request
 }
 
 func validateProposalRequest(request handoff.Request) error {

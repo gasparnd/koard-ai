@@ -31,6 +31,7 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | `consent.md` | Candidate-bound consent for independent review |
 | `contributing.md` | Development workflow and checks |
 | `events.md` | Structured workflow events and diagnostics |
+| `independent-review.md` | Layer-by-layer guide to exact, read-only candidate review |
 | `handoffs.md` | Versioned request and result contracts between roles |
 | `odd.md` | ODD states, transitions, and interruption behavior |
 | `review-mode.md` | User-owned switch for receipt-driven development |

@@ -133,6 +133,12 @@ Commands:
              Show or set the user-owned review mode
   review consent <status|grant|decline> --workflow <id>
              Show or record review consent for one candidate snapshot
+  review run --workflow <id>
+             Run the next authorized bounded independent-review transition
+  review status --workflow <id>
+             Show the independent-review lifecycle for one workflow
+  review correction <status|grant|decline> --workflow <id>
+             Show or record the separate decision for one correction request
   version    Print the CLI version
   help       Show this help`)
 }
