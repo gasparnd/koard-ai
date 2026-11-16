@@ -81,13 +81,15 @@ func Apply(runDir, workspace string) (Record, error) {
 		return Record{}, fmt.Errorf("verify candidate snapshot: %w", err)
 	}
 
-	// Every entry is read and its path validated before anything is
-	// written, the same guarantee snapshot.Capture already gives its own
-	// writes: a refused candidate leaves no partial change in the real
-	// workspace, never a write started on entry N-1 before entry N failed.
+	// Every entry is read, its path validated, and its final on-disk target
+	// resolved before anything is written, the same guarantee
+	// snapshot.Capture already gives its own writes: a refused candidate
+	// leaves no partial change in the real workspace, never a write started
+	// on entry N-1 before entry N failed.
 	type write struct {
 		target  string
 		content []byte
+		mode    os.FileMode
 	}
 	writes := make([]write, 0, len(stored.Manifest.Entries))
 	for _, entry := range stored.Manifest.Entries {
@@ -99,10 +101,14 @@ func Apply(runDir, workspace string) (Record, error) {
 		if err != nil {
 			return Record{}, err
 		}
-		writes = append(writes, write{target: filepath.Join(root, relative), content: content})
+		target, err := resolveWorkspaceTarget(root, relative)
+		if err != nil {
+			return Record{}, fmt.Errorf("resolve %q: %w", entry.URI, err)
+		}
+		writes = append(writes, write{target: target, content: content, mode: existingModeOrDefault(target)})
 	}
 	for _, pending := range writes {
-		if err := writeFileAtomic(pending.target, pending.content, 0o644); err != nil {
+		if err := writeFileAtomic(pending.target, pending.content, pending.mode); err != nil {
 			return Record{}, fmt.Errorf("apply %q: %w", pending.target, err)
 		}
 	}
@@ -156,6 +162,42 @@ func validateRecord(record Record) error {
 	return nil
 }
 
+// resolveWorkspaceTarget turns a validated relative path into the exact
+// file to write, re-checking — the same way snapshot.readArtifact already
+// does before a read — that the path still resolves inside root even if an
+// intermediate directory has become a symlink since the candidate was
+// captured. A symlinked parent is exactly the kind of drift Apply must not
+// trust blindly: writing through it would place the approved bytes outside
+// the workspace while still reporting success.
+func resolveWorkspaceTarget(root, relative string) (string, error) {
+	directory := filepath.Join(root, filepath.Dir(relative))
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		return "", fmt.Errorf("create directory %s: %w", directory, err)
+	}
+	resolvedDirectory, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		return "", fmt.Errorf("resolve directory: %w", err)
+	}
+	inside, err := filepath.Rel(root, resolvedDirectory)
+	if err != nil || !filepath.IsLocal(inside) {
+		return "", errors.New("path resolves outside the workspace")
+	}
+	return filepath.Join(resolvedDirectory, filepath.Base(relative)), nil
+}
+
+// existingModeOrDefault preserves the permissions of a file Apply is about
+// to overwrite, instead of forcing every applied file to the same mode. An
+// existing executable script keeps its exec bit, and an existing restrictive
+// file (for example a secret or config meant to stay 0600) does not quietly
+// become world-readable just because its content changed. A path that does
+// not yet exist, or is not an ordinary file, gets a reasonable default.
+func existingModeOrDefault(target string) os.FileMode {
+	if info, err := os.Lstat(target); err == nil && info.Mode().IsRegular() {
+		return info.Mode().Perm()
+	}
+	return 0o644
+}
+
 func writeRecord(runDir string, record Record) error {
 	encoded, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
@@ -198,5 +240,21 @@ func writeFileAtomic(path string, content []byte, mode os.FileMode) error {
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return fmt.Errorf("replace %s: %w", path, err)
 	}
+	// A rename is only durable once its directory entry is itself synced —
+	// otherwise a crash can persist one rename (for instance apply.json's)
+	// while losing another, leaving the completion marker and the files it
+	// describes disagreeing about what actually happened.
+	if err := syncDirectory(directory); err != nil {
+		return fmt.Errorf("sync directory %s: %w", directory, err)
+	}
 	return nil
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	return directory.Sync()
 }

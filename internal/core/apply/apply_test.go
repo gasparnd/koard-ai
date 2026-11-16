@@ -2,7 +2,9 @@ package apply
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -124,6 +126,14 @@ func TestApplyRequiresAVerifiedReceipt(t *testing.T) {
 func TestApplyWritesTheExactReceiptedBytes(t *testing.T) {
 	runDir, workspace := approvedFixture(t, map[string]string{"change.go": "package change\n"})
 
+	// Overwrite the workspace with different, stale content after the
+	// candidate was captured and reviewed: the assertion below can only
+	// pass if Apply actually performs a write, not merely if the file
+	// already happened to hold the right bytes.
+	if err := os.WriteFile(filepath.Join(workspace, "change.go"), []byte("stale\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	record, err := Apply(runDir, workspace)
 	if err != nil {
 		t.Fatalf("apply: %v", err)
@@ -136,12 +146,57 @@ func TestApplyWritesTheExactReceiptedBytes(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(content) != "package change\n" {
-		t.Fatalf("unexpected content: %q", content)
+		t.Fatalf("unexpected content: %q, want the receipted candidate to have overwritten the stale workspace file", content)
 	}
 
 	stored, err := Status(runDir)
 	if err != nil || stored == nil || *stored != record {
 		t.Fatalf("stored=%#v err=%v", stored, err)
+	}
+}
+
+func TestApplyPreservesTheExistingFileMode(t *testing.T) {
+	runDir, workspace := approvedFixture(t, map[string]string{"script.sh": "#!/bin/sh\necho hi\n"})
+	target := filepath.Join(workspace, "script.sh")
+	if err := os.Chmod(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Apply(runDir, workspace); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	info, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("apply changed the existing file mode: got %v, want 0755 (the executable bit must survive)", info.Mode().Perm())
+	}
+}
+
+func TestApplyRejectsEscapeThroughASymlinkedParentDirectory(t *testing.T) {
+	runDir, workspace := approvedFixture(t, map[string]string{"sub/change.go": "package change\n"})
+
+	// Simulate drift after capture: the directory the candidate's path
+	// names is no longer a real directory inside the workspace, but a
+	// symlink pointing outside it.
+	outside := t.TempDir()
+	if err := os.RemoveAll(filepath.Join(workspace, "sub")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(workspace, "sub")); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Apply(runDir, workspace); err == nil || !strings.Contains(err.Error(), "outside the workspace") {
+		t.Fatalf("expected a workspace-escape error, got %v", err)
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("apply wrote through the symlink, outside the workspace: %v", entries)
 	}
 }
 
@@ -198,8 +253,13 @@ func TestApplyRecoversAfterAnInterruptedRun(t *testing.T) {
 
 func TestApplyRejectsCorruptedSnapshotBeforeWritingAnything(t *testing.T) {
 	runDir, workspace := approvedFixture(t, map[string]string{"a.go": "package a\n", "b.go": "package b\n"})
-	before, err := os.ReadFile(filepath.Join(workspace, "a.go"))
-	if err != nil {
+
+	// a.go is left stale (different from its receipted content) so that an
+	// accidental write to it — even though a.go itself is not corrupted —
+	// would be observable below. If the assertion only compared a.go to
+	// its already-correct receipted bytes, a write that happened anyway
+	// would be indistinguishable from one that never did.
+	if err := os.WriteFile(filepath.Join(workspace, "a.go"), []byte("stale\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -211,7 +271,16 @@ func TestApplyRejectsCorruptedSnapshotBeforeWritingAnything(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	blob := filepath.Join(runDir, "snapshot", "blobs", "sha256", strings.TrimPrefix(stored.Manifest.Entries[0].Digest, "sha256:"))
+	var corrupted snapshot.Entry
+	for _, entry := range stored.Manifest.Entries {
+		if entry.URI == "repo://b.go" {
+			corrupted = entry
+		}
+	}
+	if corrupted.URI == "" {
+		t.Fatal("test setup is wrong: b.go entry not found")
+	}
+	blob := filepath.Join(runDir, "snapshot", "blobs", "sha256", strings.TrimPrefix(corrupted.Digest, "sha256:"))
 	if err := os.Chmod(blob, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -226,8 +295,8 @@ func TestApplyRejectsCorruptedSnapshotBeforeWritingAnything(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(before) != string(after) {
-		t.Fatal("a refused apply wrote a partial change to the workspace")
+	if string(after) != "stale\n" {
+		t.Fatalf("a refused apply wrote a.go even though only b.go was corrupted: %q", after)
 	}
 	if _, err := os.Stat(filepath.Join(runDir, FileName)); !os.IsNotExist(err) {
 		t.Fatalf("refused apply wrote a completion record: %v", err)
@@ -274,5 +343,95 @@ func TestApplyNeverTouchesGit(t *testing.T) {
 	}
 	if strings.TrimSpace(string(staged)) != "" {
 		t.Fatalf("apply staged changes: %q", staged)
+	}
+}
+
+// TestApplyRejectsAnUnsafeManifestEntryBeforeWritingAnything hand-crafts a
+// snapshot directory directly, bypassing snapshot.Capture entirely — Capture
+// would never allow an unsafe path to be stored in the first place. This
+// proves Apply's own defense in depth independently protects the real
+// workspace, not merely that Capture is careful; the two checks happen to
+// share one function, but a future change to either must not rely on that.
+func TestApplyRejectsAnUnsafeManifestEntryBeforeWritingAnything(t *testing.T) {
+	root := t.TempDir()
+	workspace := filepath.Join(root, "workspace")
+	runDir := filepath.Join(root, "workflow-1")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshotDir := filepath.Join(runDir, "snapshot")
+	maliciousContent := []byte("malicious\n")
+	digest := fmt.Sprintf("sha256:%x", sha256.Sum256(maliciousContent))
+	blobPath := filepath.Join(snapshotDir, "blobs", "sha256", strings.TrimPrefix(digest, "sha256:"))
+	if err := os.MkdirAll(filepath.Dir(blobPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blobPath, maliciousContent, 0o444); err != nil {
+		t.Fatal(err)
+	}
+
+	candidateID := "sha256:" + strings.Repeat("a", 64)
+	manifest := snapshot.Manifest{
+		SchemaVersion: snapshot.CurrentSchemaVersion,
+		CandidateID:   candidateID,
+		Entries:       []snapshot.Entry{{Kind: "source", URI: "repo://../escape.txt", Digest: digest, Size: int64(len(maliciousContent))}},
+	}
+	manifestEncoded, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(snapshotDir, "manifest.json"), manifestEncoded, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	snapshotID := fmt.Sprintf("sha256:%x", sha256.Sum256(manifestEncoded))
+
+	assessment, err := risk.Assess(snapshotDir, snapshotID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome := agentrouter.Outcome{
+		SchemaVersion: agentrouter.CurrentSchemaVersion,
+		WorkflowID:    filepath.Base(runDir),
+		TaskID:        "task-1",
+		Status:        handoff.StatusCompleted,
+		Candidate: &candidate.Candidate{
+			SchemaVersion: candidate.CurrentSchemaVersion,
+			ID:            candidateID,
+			TaskID:        "task-1",
+			HandoffID:     "workflow-1-1",
+			SnapshotID:    snapshotID,
+		},
+		Risk: &assessment,
+	}
+	outcomeEncoded, err := json.Marshal(outcome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runDir, "workflow.json"), outcomeEncoded, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := consent.Decide(runDir, consent.Granted); err != nil {
+		t.Fatal(err)
+	}
+
+	reviewer := reviewerFunc(func(_ context.Context, request review.Request, _ string) (review.Result, error) {
+		return review.Result{SchemaVersion: review.CurrentSchemaVersion, RequestID: request.ID, Attempt: request.Attempt, Target: request.Target, Verdict: review.VerdictApproved}, nil
+	})
+	if _, err := review.RunInitial(context.Background(), review.Options{RunDir: runDir, Reviewer: reviewer, ReviewerIdentity: review.ReviewerIdentity{Runtime: "test", Model: "reviewer-v1"}, ReviewMode: modeOn}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Apply(runDir, workspace); err == nil || !strings.Contains(err.Error(), "canonical relative path") {
+		t.Fatalf("expected a path-safety error, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "escape.txt")); !os.IsNotExist(err) {
+		t.Fatalf("apply escaped the workspace: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(runDir, FileName)); !os.IsNotExist(err) {
+		t.Fatalf("refused apply wrote a completion record: %v", err)
 	}
 }
