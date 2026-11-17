@@ -16,6 +16,7 @@ import (
 	"github.com/koard-ai/koard/internal/config"
 	"github.com/koard-ai/koard/internal/core/agentrouter"
 	"github.com/koard-ai/koard/internal/core/handoff"
+	"github.com/koard-ai/koard/internal/core/snapshot"
 )
 
 const runUsage = "Usage: koard run --workflow <id> --task <id> --objective <text> [--policy fixed|planned]"
@@ -52,7 +53,7 @@ func runWorkflow(args []string, cwd string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, runUsage)
 		return 2
 	}
-	err := executeWorkflow(cwd, *id, *task, *objective, *policy, stdout)
+	err := executeWorkflow(cwd, *id, *task, *objective, *policy, stdout, stderr)
 	if err != nil {
 		fmt.Fprintf(stderr, "koard run: %v\n", err)
 		return 1
@@ -60,7 +61,7 @@ func runWorkflow(args []string, cwd string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func executeWorkflow(cwd, id, task, objective, policy string, stdout io.Writer) error {
+func executeWorkflow(cwd, id, task, objective, policy string, stdout, stderr io.Writer) error {
 	if err := agentrouter.ValidateWorkflowID(id); err != nil {
 		return err
 	}
@@ -94,7 +95,31 @@ func executeWorkflow(cwd, id, task, objective, policy string, stdout io.Writer) 
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	outcome, err := agentrouter.Route(ctx, agentrouter.Options{WorkflowID: id, TaskID: task, Objective: objective, Policy: policy, StateDir: stateDir, Workspace: cwd, Runner: runner})
+	options := agentrouter.Options{WorkflowID: id, TaskID: task, Objective: objective, Policy: policy, StateDir: stateDir, Workspace: cwd, Runner: runner}
+	var client memoryClient
+	memoryCWD := cwd
+	// A replay belongs to the router's existing refusal path, not a fresh memory
+	// session. Provider validation above also remains ahead of all memory work.
+	if _, inspectErr := os.Lstat(filepath.Join(stateDir, id)); os.IsNotExist(inspectErr) && cfg.Memory.Provider != "none" {
+		var memoryErr error
+		if cfg.Memory.Provider != "engram" {
+			memoryErr = fmt.Errorf("unsupported memory provider %q", cfg.Memory.Provider)
+		} else {
+			memoryCWD, memoryErr = snapshot.RealWorkspace(cwd)
+			if memoryErr == nil {
+				client, memoryErr = memoryProvider(ctx, memoryCWD)
+			}
+		}
+		if memoryErr == nil {
+			defer closeMemory(client, stderr)
+			options.Context, memoryErr = recallMemory(ctx, memoryCWD, objective, client)
+			options.VerifierInstructions = memoryInstructions
+		}
+		if memoryErr != nil {
+			fmt.Fprintln(stderr, "koard: memory unavailable:", memoryErr)
+		}
+	}
+	outcome, err := agentrouter.Route(ctx, options)
 	if outcome.WorkflowID != "" {
 		fmt.Fprintf(stdout, "workflow: %s\npolicy: %s\nstatus: %s\n", id, policy, outcome.Status)
 		if outcome.Candidate != nil {
@@ -106,6 +131,9 @@ func executeWorkflow(cwd, id, task, objective, policy string, stdout io.Writer) 
 	}
 	if outcome.Status != handoff.StatusCompleted {
 		return fmt.Errorf("workflow %q stopped with status %q", id, outcome.Status)
+	}
+	if client != nil {
+		retainMemory(ctx, memoryCWD, id, client, stdout, stderr)
 	}
 	return nil
 }
@@ -122,11 +150,34 @@ func (runner workflowRunner) Execute(ctx context.Context, request handoff.Reques
 	}
 	// Core evidence is run-relative. Resolve only its result references for the
 	// adapter's workspace view, retaining the exact persisted bytes and digest.
+	original := append([]handoff.Reference(nil), request.Context...)
 	request.Context = append([]handoff.Reference(nil), request.Context...)
 	for i, reference := range request.Context {
-		if i == 0 && reference.Kind == agentrouter.ResultReferenceKind && strings.HasPrefix(reference.URI, "handoffs/") {
+		if reference.Kind == agentrouter.ResultReferenceKind && strings.HasPrefix(reference.URI, "handoffs/") {
+			if _, err := snapshot.CanonicalRelativePath("repo://" + reference.URI); err != nil {
+				return handoff.Result{}, err
+			}
 			request.Context[i].URI = "repo://" + filepath.ToSlash(filepath.Join(runner.runPath, reference.URI))
 		}
 	}
-	return adapter.Execute(ctx, request)
+	result, err := adapter.Execute(ctx, request)
+	if err != nil || len(result.MemoryProposals) == 0 {
+		return result, err
+	}
+	if err := handoff.ValidateResultFor(request, result); err != nil {
+		return handoff.Result{}, err
+	}
+	result.MemoryProposals = append([]handoff.MemoryProposal(nil), result.MemoryProposals...)
+	for i := range result.MemoryProposals {
+		result.MemoryProposals[i].Evidence = append([]handoff.Reference(nil), result.MemoryProposals[i].Evidence...)
+		for j, ref := range result.MemoryProposals[i].Evidence {
+			for index, translated := range request.Context {
+				if ref == translated {
+					result.MemoryProposals[i].Evidence[j] = original[index]
+					break
+				}
+			}
+		}
+	}
+	return result, nil
 }

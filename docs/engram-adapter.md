@@ -1,8 +1,8 @@
 # Engram adapter
 
 The internal adapter implements Koard's memory store using **Engram 3.7.2**.
-It is not yet connected to `koard run` or public memory-decision commands.
-The roadmap's Engram integration remains incomplete until that wiring is verified.
+It is composed by `koard run` and public memory-decision commands. See
+[memory.md](memory.md) for automatic retention, exact decisions, and limitations.
 
 ## Owned process and storage
 

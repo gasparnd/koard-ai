@@ -139,6 +139,21 @@ The instant a lifecycle settles `approved` — from either path above — it iss
 
 Every entry is read, its path validated (`snapshot.CanonicalRelativePath`, reused rather than re-derived), and its final location re-checked for containment (symlinks in the target's parent directory are resolved and must still stay inside the workspace, the same guarantee `readArtifact` already gives reads) before anything is written, then written atomically and durably — its directory entry's rename is itself synced, and an existing file's permissions are preserved rather than forced to one fixed mode. Idempotency and recovery from any interruption fall out of two properties rather than a write-ahead journal: the bytes to write are deterministic from the already-verified snapshot, and each write is atomic — so calling `Apply` again after any interruption simply re-verifies and re-writes everything, converging on the identical correct state every time. A mutable completion marker (`apply.json`, the same reasoning `workflow.json` already uses) makes a *repeat* call on an already-applied workflow a fast no-op. Apply never invokes git in any form; delivery (commit, push, pull request, merge, release) remains an entirely separate, human-driven decision. `koard review apply --workflow <id>` is its only entry point; `koard review status`/`run` print one `apply: applied` line once it has happened. See `controlled-mutation.md`.
 
+## Project-scoped memory
+
+`internal/core/memory` assesses optional verifier proposals and owns exact decisions
+and durable at-most-one write attempts. The Engram adapter owns authenticated local
+process startup, canonical project/session registration, scoped full reads, and
+non-replacing saves. The CLI composes both; neither models nor recalled text choose
+storage scope or grant permission. See [memory.md](memory.md).
+
+The router accepts optional application context and verifier instructions, persisting
+the exact request sent to each role. CLI evidence resolution reuses snapshot confinement
+and digest checking, rejects recall file identities as source evidence, and reverses
+provider path translation before handoff validation. Memory failures warn separately
+without changing a successfully completed workflow's status. ODD runtime wiring is
+still deferred.
+
 ## Runtime adapters
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role. The same adapter also implements `review.Reviewer`: before a review or correction invocation, `snapshot.Materialize` reconstructs the exact reviewed snapshot as an ordinary file tree in a disposable temporary directory (verifying every entry's digest as it writes), so the adapter's read-only session inspects precisely those bytes — never the live, possibly-drifted workspace — and the directory is removed as soon as the invocation returns.
 

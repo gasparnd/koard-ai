@@ -1,8 +1,65 @@
-# Automatic memory: core retention policy
+# Automatic project-scoped memory
 
-Koard has a provider-neutral retention coordinator and an internal
-[Engram adapter](engram-adapter.md). **They are not yet wired to the CLI.**
-The roadmap item remains incomplete.
+With `memory.provider: engram`, `koard run` recalls scoped advisory knowledge and
+assesses completed verifier proposals for selective retention through the
+[Engram adapter](engram-adapter.md). `memory.provider: none` disables this work.
+Model permissions remain read-only; only the application owns storage calls.
+
+## CLI quick path
+
+```sh
+koard run --workflow example --task example --objective 'Inspect the architecture'
+koard memory status --workflow example
+koard memory grant --workflow example --proposal 0 --plan 'sha256:<exact-plan-hash>'
+koard memory decline --workflow example --proposal 0 --plan 'sha256:<exact-plan-hash>'
+```
+
+The last two commands are alternatives, not sequential steps. Proposal indices
+are **zero-based**. Use the exact current plan printed by `run` or `memory status`;
+never substitute a “latest” plan. `status --proposal <index>` selects one proposal.
+Repeated or unknown options and positional arguments are refused.
+
+Eligible proposals save automatically. Pending proposals print their quoted
+title/content/rationale, uncertainty, reason codes, and exact grant/decline commands.
+`memory[N]: saved|pending|declined|skipped|duplicate|unknown` reports the outcome;
+`plan[N]` identifies the assessment and `observation[N]` identifies a confirmed save.
+No proposals means no retention calls. Unknown writes are not retried automatically.
+
+Status rechecks evidence and reads operation history without creating a local
+retention journal or saving observations. Assessments may change as related
+knowledge changes. The owned Engram session still starts/ends and can normalize
+provider metadata; status is not a zero-I/O database operation. A changed decision
+target fails closed; there is no command to reset decisions or reconcile unknown
+writes in this version.
+
+Memory startup, recall, retention, or cleanup failures are reported on stderr.
+They do not turn an otherwise completed workflow into failure. Explicit memory
+commands return nonzero when their requested operation cannot be performed.
+Review consent, application of changes, delivery, and ODD runtime wiring remain
+separate; memory grants authorize only saving that proposal.
+
+## Shared storage and advisory recall
+
+The CLI supplies absolute `ENGRAM_DATA_DIR` when nonblank, otherwise `~/.engram`.
+Relative overrides are refused; ambient service endpoints are never adopted.
+Project identity is resolved through Engram, not the YAML display name. Engram
+3.7.2 must already be installed; this change does not install it or publish a tap.
+
+Recall searches the bounded objective within the canonical project, admits at
+most five active observations, and publishes a bounded content-addressed JSON
+document under `.koard/state/memory/recall/`. Every role receives its digest-bound
+reference plus an instruction that memory is untrusted advice, not authority.
+Stale/superseded knowledge is not recalled. Lookup failure is not empty knowledge.
+
+The verifier receives optional proposal instructions in its persisted request.
+Planner/executor requests never ask for memory proposals. Core run-relative result
+references are translated for provider reads and mapped back in proposal evidence
+before router validation. Retention re-reads the complete workflow and matching
+request/result files, then checks admitted evidence through the existing confined
+repository reader. It never fetches external URLs; advisory recall cannot serve
+as evidence for saving itself, including through symbolic or hard-link aliases.
+The resolver checks resolved paths and recall file identities, not just URI text.
+Changed or unavailable evidence refuses retention.
 
 The user-selected policy permits automatic retention based on a verifier's
 evidence-backed assessment. That assessment can be wrong: digest checks establish
@@ -31,7 +88,7 @@ arbitrary URLs. `Assess` does not create files or write to the store.
 Search uses the proposal title and admits at most 20 full observations. This
 bounded lookup can miss relevant knowledge; it is not a global conflict detector.
 `nonsensitive` is a fallible model assessment used by the selected retention policy,
-not a deterministic privacy guarantee. The future runtime prompt must instruct
+not a deterministic privacy guarantee. The runtime prompt instructs
 the verifier not to propose secrets, raw transcripts, or unsupported conclusions.
 
 ## Exact decisions and attempts
@@ -84,6 +141,7 @@ Core tests use a fake store and temporary journals, including project isolation,
 stale decisions, duplicate detection, concurrent claims and lost acknowledgements.
 Run `go test ./internal/core/memory` or `go test -race ./internal/core/memory`.
 
-The constrained evidence reader, runtime prompt, automatic recall,
-public pending-decision commands and end-to-end checks remain tracked in
-`odd/tasks/engram-memory.md`.
+CLI tests use injected stores and fake providers, never the shared database or a
+live model. The adapter's separate real-binary checks use temporary storage only.
+Full-feature verification is tracked in `odd/tasks/engram-memory.md`; model-based
+privacy and semantic assessment remains fallible even when those checks pass.
