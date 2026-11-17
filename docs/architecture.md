@@ -50,7 +50,7 @@ The contract does not choose storage, generate identities, or infer event meanin
 
 ## Agent routing
 
-`internal/core/agentrouter` owns the first fixed orchestration route. Version 1 composes exactly two provider-neutral handoffs, planner → executor and executor → verifier, and stops as soon as a result is not `completed`.
+`internal/core/agentrouter` owns bounded, provider-neutral routing policies. `fixed` (the default) preserves the two original handoffs, planner → executor and executor → verifier. `planned` prepends orchestrator → planner, so planning actually executes. Both stop as soon as a result is not `completed`. The orchestrator is a sender-only role, never a responding model or model-selected next role.
 
 The router validates options and every request before execution, binds each result to its request identity and destination role, and persists one workflow directory under `.koard/state/runs/<workflow_id>/`:
 
@@ -60,7 +60,7 @@ The router validates options and every request before execution, binds each resu
 
 State files are written atomically, and a workflow identity is claimed with an atomic directory creation so a concurrent or replayed run fails instead of interleaving files. A claimed identity always leaves a readable record: every step writes through one object with a single persist point, so a run that stops still persists `workflow.json` with status `failed`, keeping the steps that did complete. The failure is also recorded as a diagnostic in `events.jsonl`, naming the handoff that was executing and the cause. Each hop after the first carries the previous result as a digest-bound `Context` reference, so the next role inspects the exact persisted bytes instead of a paraphrase. The router never mutates the workspace, never performs delivery operations, and never authorizes a model-returned `next` transition.
 
-Provider execution enters through one injected runner interface. The OpenCode and Codex adapters satisfy it structurally, so the core keeps its inward-only dependency direction. A run cancelled through its context before it starts claims no identity; one cancelled after it starts stops before the next handoff and records a `KOARD_WORKFLOW_CANCELLED` warning instead of a failure. Routing policies beyond the fixed route, ODD state-machine integration, retries, resuming an incomplete workflow, and CLI wiring remain later work.
+Provider execution enters through one injected runner interface. The OpenCode and Codex adapters satisfy it structurally, so the core keeps its inward-only dependency direction. `koard run` selects the policy and composes providers by destination role using `agents.planner`, `agents.executor`, and `agents.verifier`; required unresolved choices fail before run state is created. A run cancelled through its context before it starts claims no identity; one cancelled after it starts stops before the next handoff and records a `KOARD_WORKFLOW_CANCELLED` warning instead of a failure. ODD state-machine integration, arbitrary/conditional policies, retries, and resuming an incomplete workflow remain later work. See [routing.md](routing.md) for commands, evidence resolution, and authority boundaries.
 
 ## Candidate identity
 

@@ -39,5 +39,6 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | `receipt.md` | Immutable, digest-verifiable proof that a candidate completed review |
 | `review-mode.md` | User-owned switch for receipt-driven development |
 | `roadmap.md` | Current state and incremental milestones |
+| `routing.md` | Read-only CLI execution, policies, role providers, and evidence |
 | `self-hosting.md` | How Koard will understand and improve itself |
 | `skill-style-guide.md` | Contract for project-level skills |

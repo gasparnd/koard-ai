@@ -101,6 +101,9 @@ func MarshalResult(result Result) ([]byte, error) {
 	return marshal(result)
 }
 
+// RoleOrchestrator is a sender only; it is never a responding model role.
+const RoleOrchestrator Role = "orchestrator"
+
 func (request Request) Validate() error {
 	if err := validateSchemaVersion(request.SchemaVersion); err != nil {
 		return err
@@ -111,7 +114,7 @@ func (request Request) Validate() error {
 	if strings.TrimSpace(request.TaskID) == "" {
 		return errors.New("task_id is required")
 	}
-	if !request.From.valid() {
+	if !request.From.valid() && request.From != RoleOrchestrator {
 		return fmt.Errorf("from role %q is invalid", request.From)
 	}
 	if !request.To.valid() {
