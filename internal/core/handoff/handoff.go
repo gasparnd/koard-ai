@@ -39,14 +39,15 @@ type Request struct {
 }
 
 type Result struct {
-	SchemaVersion int         `json:"schema_version"`
-	HandoffID     string      `json:"handoff_id"`
-	Role          Role        `json:"role"`
-	Status        Status      `json:"status"`
-	Summary       string      `json:"summary"`
-	Artifacts     []Reference `json:"artifacts,omitempty"`
-	Evidence      []Reference `json:"evidence,omitempty"`
-	Next          *Transition `json:"next,omitempty"`
+	SchemaVersion   int              `json:"schema_version"`
+	HandoffID       string           `json:"handoff_id"`
+	Role            Role             `json:"role"`
+	Status          Status           `json:"status"`
+	Summary         string           `json:"summary"`
+	Artifacts       []Reference      `json:"artifacts,omitempty"`
+	Evidence        []Reference      `json:"evidence,omitempty"`
+	Next            *Transition      `json:"next,omitempty"`
+	MemoryProposals []MemoryProposal `json:"memory_proposals,omitempty"`
 }
 
 type Reference struct {
@@ -172,7 +173,7 @@ func (result Result) Validate() error {
 		}
 	}
 
-	return nil
+	return result.validateMemoryProposals()
 }
 
 func ValidateResultFor(request Request, result Result) error {
@@ -187,6 +188,20 @@ func ValidateResultFor(request Request, result Result) error {
 	}
 	if result.Role != request.To {
 		return fmt.Errorf("result role %q does not match request destination %q", result.Role, request.To)
+	}
+	for i, proposal := range result.MemoryProposals {
+		for j, evidence := range proposal.Evidence {
+			found := false
+			for _, reference := range request.Context {
+				if reference == evidence {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("memory_proposals[%d].evidence[%d] is not bound to request context", i, j)
+			}
+		}
 	}
 
 	return nil
