@@ -1,7 +1,8 @@
 # Automatic memory: core retention policy
 
-Koard now has a provider-neutral retention coordinator. **It is not yet wired
-to the CLI or a live Engram adapter.** The roadmap item remains incomplete.
+Koard has a provider-neutral retention coordinator and an internal
+[Engram adapter](engram-adapter.md). **They are not yet wired to the CLI.**
+The roadmap item remains incomplete.
 
 The user-selected policy permits automatic retention based on a verifier's
 evidence-backed assessment. That assessment can be wrong: digest checks establish
@@ -72,8 +73,8 @@ preserve existing knowledge; there is no update or delete operation in the port.
 The exact returned type, title and content must match the proposal before recording
 success. Provenance is retained in the local plan and operation identity.
 
-The planned Engram adapter must omit topic-key upserts and prompt capture, disable
-its owned process's cloud autosync, and validate startup/session ownership. Shared
+The Engram adapter omits topic-key upserts and prompt capture, disables
+its owned process's cloud autosync, and validates startup/session ownership. Shared
 storage can still be synced by another client; this coordinator does not control
 that client. No shared store is opened by the core tests.
 
@@ -83,6 +84,6 @@ Core tests use a fake store and temporary journals, including project isolation,
 stale decisions, duplicate detection, concurrent claims and lost acknowledgements.
 Run `go test ./internal/core/memory` or `go test -race ./internal/core/memory`.
 
-The Engram transport, constrained evidence reader, runtime prompt, automatic recall,
+The constrained evidence reader, runtime prompt, automatic recall,
 public pending-decision commands and end-to-end checks remain tracked in
 `odd/tasks/engram-memory.md`.
