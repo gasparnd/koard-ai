@@ -118,8 +118,9 @@ the request-context binding. Neither operation reads evidence files.
 **A proposal is not verified knowledge or permission to save.** A digest identifies
 bytes; it does not prove a claim. `completed` does not mean tests passed, and
 `nonsensitive` is an untrusted model assessment, not privacy clearance. Proposals
-cannot select a project, grant consent, or invoke storage. The memory coordinator
-and Engram persistence are still pending; this contract alone performs no memory
+cannot select a project, grant consent, or invoke storage. The provider-neutral
+[memory coordinator](memory.md) applies the user-selected retention policy; Engram
+and CLI integration are still pending. This contract alone performs no memory
 reads or writes. Runtime prompts do not yet request these proposals.
 
 ## Validation guarantees

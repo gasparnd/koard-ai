@@ -8,8 +8,8 @@ import (
 )
 
 // MemoryProposal is a model's suggestion, never verified knowledge or permission
-// to persist. The application must assess evidence, sensitivity and uncertainty
-// independently before deciding whether to retain it.
+// to persist. The application must bind evidence and apply its retention policy
+// before saving; the verifier's semantic and privacy assessments remain fallible.
 type MemoryProposal struct {
 	Type        string      `json:"type"`
 	Title       string      `json:"title"`
