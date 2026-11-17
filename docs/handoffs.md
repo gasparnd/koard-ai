@@ -89,6 +89,39 @@ Result status is one of `completed`, `blocked`, or `failed`. The result must ref
 
 A completed executor result is what `internal/core/candidate` turns into a candidate: the identity is the SHA-256 digest of the result summary plus its artifacts and evidence, so the references declared here are the content the identity binds. The router then captures each executor artifact as a candidate snapshot, which accepts only `repo://` paths relative to the workspace; any other artifact, or a declared `digest` that does not match the file's bytes, refuses the candidate. See `architecture.md`.
 
+## Optional memory proposals
+
+A completed verifier result may include `memory_proposals` (at most eight).
+Omitting it, or returning an empty list, means no memory was proposed. Existing
+results remain valid and the field is omitted when empty. Older strict decoders
+reject the new field; this is an additive extension of Koard's internal v1 contract,
+not a claim that older binaries can consume new proposals.
+
+Each proposal contains:
+
+| Field | Contract |
+|---|---|
+| `type` | `decision`, `architecture`, `bugfix`, `pattern`, `config`, `discovery`, or `preference` |
+| `title` | Nonblank, at most 256 bytes |
+| `content` | Nonblank, at most 4096 bytes |
+| `rationale` | Why this knowledge is durable; nonblank, at most 1024 bytes |
+| `evidence` | One to eight references, each identical to a reference in the request context |
+| `sensitivity` | Model assessment: `nonsensitive`, `sensitive`, or `unknown` |
+| `uncertainty` | Optional list of at most eight nonblank reasons, each at most 512 bytes |
+
+Evidence kinds are limited to 128 bytes and URIs to 2048 bytes; both must be
+nonblank. Each evidence digest must be `sha256:` followed by 64 lowercase hex
+digits. Binding compares kind, URI, and digest, not just a matching filename.
+`DecodeResult` validates proposal shape; `ValidateResultFor` additionally checks
+the request-context binding. Neither operation reads evidence files.
+
+**A proposal is not verified knowledge or permission to save.** A digest identifies
+bytes; it does not prove a claim. `completed` does not mean tests passed, and
+`nonsensitive` is an untrusted model assessment, not privacy clearance. Proposals
+cannot select a project, grant consent, or invoke storage. The memory coordinator
+and Engram persistence are still pending; this contract alone performs no memory
+reads or writes. Runtime prompts do not yet request these proposals.
+
 ## Validation guarantees
 
 The implementation in `internal/core/handoff`:
