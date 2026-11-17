@@ -119,9 +119,10 @@ the request-context binding. Neither operation reads evidence files.
 bytes; it does not prove a claim. `completed` does not mean tests passed, and
 `nonsensitive` is an untrusted model assessment, not privacy clearance. Proposals
 cannot select a project, grant consent, or invoke storage. The provider-neutral
-[memory coordinator](memory.md) applies the user-selected retention policy; Engram
-and CLI integration are still pending. This contract alone performs no memory
-reads or writes. Runtime prompts do not yet request these proposals.
+[memory coordinator](memory.md) applies the user-selected retention policy through
+the CLI and Engram adapter. This contract alone performs no memory reads or writes.
+When memory is enabled, the verifier's persisted request asks for optional proposals;
+planner and executor requests do not. Model permissions remain read-only.
 
 ## Validation guarantees
 
@@ -140,5 +141,10 @@ The proposal-only OpenCode and Codex adapters implement this protocol without ch
 The agent router composes this protocol into the `fixed` and `planned` policies. The former preserves planner → executor → verifier handoffs without running a planner; the latter first invokes the planner through an orchestrator → planner handoff. Each hop is an independent request/result pair with its own identity, so a result can only answer the handoff it was created for. See [routing.md](routing.md).
 
 Every request after the first carries what it must consume: a `Context` reference with kind `koard.handoff.result`, a run-relative URI, and a `sha256:` digest of the persisted result bytes, followed by any artifact the responder declared. The executor receives the actual plan in `planned`; the verifier receives the actual proposal in either policy. CLI composition resolves run-relative result references to repository URIs for the adapters.
+
+Application-supplied advisory context can also reach every role. Memory references
+are explicitly untrusted, never storage authority or source evidence. CLI composition
+maps proposal evidence back to original run-relative references before core validation,
+so provider-visible paths do not break exact request-context binding.
 
 The adapter does not authorize the next transition returned by a model. Agent routing records the route, and later workflow phases decide transitions.

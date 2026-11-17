@@ -73,6 +73,8 @@ func Run(args []string, cwd string, stdout, stderr io.Writer) int {
 		return runReview(args[1:], cwd, stdout, stderr)
 	case "run":
 		return runWorkflow(args[1:], cwd, stdout, stderr)
+	case "memory":
+		return runMemory(args[1:], cwd, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "koard: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, "Run 'koard help' to see available commands.")
@@ -145,6 +147,10 @@ Commands:
              Show or record the separate decision for one correction request
   review apply --workflow <id>
              Apply the exact receipted candidate snapshot to the workspace
+  memory status --workflow <id> [--proposal <index>]
+             Inspect memory proposals without saving observations
+  memory <grant|decline> --workflow <id> --proposal <index> --plan <sha256:...>
+             Decide one exact proposal (zero-based index)
   version    Print the CLI version
   help       Show this help`)
 }

@@ -44,6 +44,12 @@ A resolved `provider` names a runtime adapter. `koard review run` currently acce
 
 ## Check a project
 
+`memory.provider: engram` enables automatic project-scoped recall and selective
+retention during `koard run`. `none` disables memory without changing routing.
+Other nonblank values still pass structural validation but produce a memory
+warning during a run. The storage directory is the absolute `ENGRAM_DATA_DIR`
+override or `~/.engram`; it is not a repository YAML field. See [memory.md](memory.md).
+
 `koard run` uses the same provider choices for each destination role: executor and verifier for `fixed`, plus planner for `planned`. Required roles must have a supported provider and a model other than `unset`; an unused planner may remain unresolved. `--policy` selects routing without reinterpreting `workflow.default`. See [routing.md](routing.md).
 
 ```bash

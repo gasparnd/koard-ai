@@ -32,6 +32,7 @@ func workflowProject(t *testing.T) string {
 		t.Fatal(code)
 	}
 	text := strings.ReplaceAll(defaultConfig, "provider: unset", "provider: codex")
+	text = strings.ReplaceAll(text, "provider: engram", "provider: none")
 	text = strings.ReplaceAll(text, "model: unset", "model: test-model")
 	text = strings.Replace(text, "executor:\n    provider: codex", "executor:\n    provider: opencode", 1)
 	for _, role := range []string{"planner", "executor", "verifier"} {
