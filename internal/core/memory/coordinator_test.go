@@ -16,14 +16,15 @@ import (
 )
 
 type fakeStore struct {
-	mu        sync.Mutex
-	project   memory.Project
-	related   []memory.Observation
-	err       error
-	createErr error
-	foreign   bool
-	calls     int
-	queries   []string
+	mu           sync.Mutex
+	project      memory.Project
+	related      []memory.Observation
+	err          error
+	createErr    error
+	foreign      bool
+	indexCreates bool
+	calls        int
+	queries      []string
 }
 
 func (s *fakeStore) Resolve(ctx context.Context, cwd string) (memory.Project, error) {
@@ -47,7 +48,36 @@ func (s *fakeStore) Create(ctx context.Context, project, operation string, p han
 	if s.foreign {
 		project = "other"
 	}
-	return memory.Observation{ID: 1, Project: project, Scope: "project", Type: p.Type, Title: p.Title, Content: p.Content, State: "active"}, s.createErr
+	item := memory.Observation{ID: 1, Project: project, Scope: "project", Type: p.Type, Title: p.Title, Content: p.Content, State: "active"}
+	if s.indexCreates {
+		s.related = append(s.related, item)
+	}
+	return item, s.createErr
+}
+
+func TestIndexedCreatesPreserveOperationOutcome(t *testing.T) {
+	for _, lost := range []bool{false, true} {
+		t.Run(fmt.Sprint(lost), func(t *testing.T) {
+			c, s, in := fixture(t)
+			s.indexCreates = true
+			want := "saved"
+			if lost {
+				s.createErr = errors.New("committed but response lost")
+				want = "unknown"
+			}
+			first, err := c.Execute(context.Background(), in, nil)
+			if first.Status != want || (err != nil) != lost {
+				t.Fatalf("first %+v %v", first, err)
+			}
+			second, err := c.Execute(context.Background(), in, nil)
+			if second.Status != want || (err != nil) != lost || s.calls != 1 {
+				t.Fatalf("replay %+v %v calls=%d", second, err, s.calls)
+			}
+			if !lost && (second.PlanID != first.PlanID || second.ObservationID != first.ObservationID || second.OperationID != first.OperationID) {
+				t.Fatal("saved acknowledgement was not preserved")
+			}
+		})
+	}
 }
 
 func fixture(t *testing.T) (*memory.Coordinator, *fakeStore, memory.Input) {

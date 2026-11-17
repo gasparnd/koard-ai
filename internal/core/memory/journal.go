@@ -53,6 +53,24 @@ func syncDirectory(path string) error {
 	return f.Sync()
 }
 
+// Read-only counterpart for replay checks: absence is not a reason to create
+// state, and symlink ancestors are still refused before opening a record.
+func existingDirectory(path string) error {
+	if parent := filepath.Dir(path); parent != path {
+		if err := existingDirectory(parent); err != nil {
+			return err
+		}
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return errors.New("memory journal path is not a directory")
+	}
+	return nil
+}
+
 func publishRecord(path string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {

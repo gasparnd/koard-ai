@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -182,25 +183,35 @@ func (c *Coordinator) Execute(ctx context.Context, in Input, decision *Decision)
 	if decision != nil && (decision.PlanID != plan.ID || (decision.Answer != "granted" && decision.Answer != "declined")) {
 		return out, errors.New("memory decision must name the exact current plan and granted or declined")
 	}
-	if plan.Action == "skipped" || plan.Action == "duplicate" {
-		if decision != nil {
-			return out, errors.New("memory decisions are not accepted for skipped or duplicate proposals")
-		}
+	if decision != nil && (plan.Action == "skipped" || plan.Action == "duplicate") {
+		return out, errors.New("memory decisions are not accepted for skipped or duplicate proposals")
+	}
+	if plan.Action == "skipped" {
 		return out, nil
 	}
 	if !filepath.IsAbs(c.JournalDir) {
 		return out, errors.New("memory journal requires an absolute directory")
 	}
-	dir := filepath.Join(c.JournalDir, strings.TrimPrefix(plan.ID, "sha256:"))
-	if err := ensureDirectory(dir); err != nil {
-		return out, err
-	}
-	if err := persistExact(filepath.Join(dir, "plan.json"), plan); err != nil {
-		return out, err
-	}
 	operationDir := filepath.Join(c.JournalDir, "operations", strings.TrimPrefix(plan.OperationID, "sha256:"))
-	if err := ensureDirectory(operationDir); err != nil {
-		return out, err
+	if plan.Action == "duplicate" {
+		// A search hit does not resolve a lost acknowledgement. Consult existing
+		// operation state without creating a journal for a fresh duplicate.
+		if err := existingDirectory(operationDir); errors.Is(err, os.ErrNotExist) {
+			return out, nil
+		} else if err != nil {
+			return out, err
+		}
+	} else {
+		dir := filepath.Join(c.JournalDir, strings.TrimPrefix(plan.ID, "sha256:"))
+		if err := ensureDirectory(dir); err != nil {
+			return out, err
+		}
+		if err := persistExact(filepath.Join(dir, "plan.json"), plan); err != nil {
+			return out, err
+		}
+		if err := ensureDirectory(operationDir); err != nil {
+			return out, err
+		}
 	}
 	var saved Outcome
 	found, err := readRecord(filepath.Join(operationDir, "outcome.json"), &saved)
@@ -224,6 +235,9 @@ func (c *Coordinator) Execute(ctx context.Context, in Input, decision *Decision)
 	if found {
 		out.Status = "unknown"
 		return out, errors.New("memory attempt already exists without a confirmed outcome; do not retry")
+	}
+	if plan.Action == "duplicate" {
+		return out, nil
 	}
 	var recorded Decision
 	found, err = readRecord(filepath.Join(operationDir, "decision.json"), &recorded)
