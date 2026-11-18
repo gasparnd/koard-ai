@@ -170,6 +170,20 @@ phase scope, read-only status and failure behavior.
 
 This adapter is proposal-only. It requires OpenCode 2.2.3 or newer, disables snapshots, denies every tool by default, permits only repository `read`, `glob`, and `grep`, and disables MCP servers, skills, plugins, and web search for the run. It never enables auto-approval, worktrees, or session continuation. The adapter does not route roles, persist workflow state, produce candidate identities, mutate the workspace, or authorize delivery.
 
+Proposal and review both request `--format json`: OpenCode emits NDJSON events,
+not the model result directly. The adapter binds events to one session, collects
+text suffixes by assistant message, and selects the completed final step by its
+start timestamp, including late reconciliation. Ambiguous ordering, incomplete
+steps, transport errors and non-stop final reasons are refused. Tool/reasoning
+content is never a result. The selected text still passes the strict domain
+decoder: no fence stripping, JSON repair, fallback to earlier answers or retry.
+Prompts describe the result fields and binding rules explicitly; they do not
+assume the model can resolve a schema URI. Explicit agent selection is preserved.
+Global/project instructions can still affect responses; this is not instruction
+isolation. Invalid final prose remains an error, and raw model output is not
+included in transport diagnostics. The event format is grounded in OpenCode
+[v2.2.6 source](https://github.com/anomalyco/opencode/blob/v2.2.6/packages/cli/src/run/noninteractive.ts).
+
 The capability guard travels as inline OpenCode configuration. OpenCode evaluates managed and Console policy after that inline configuration, so an administrator or connected workspace allow can widen the guard. Because the adapter never passes auto-approval, any permission that survives the guard still fails instead of being granted in the non-interactive run.
 
 `internal/adapters/codex` is the second runtime adapter, satisfying the same two contracts — `agentrouter.Runner` and `review.Reviewer` — with a different mechanism. Codex has no per-tool allow-list, so the guard is its OS-level read-only sandbox (`-s read-only`) instead of a policy document: a write attempt fails inside the sandbox rather than becoming an approval decision. Every invocation also passes `--ephemeral` (no resumable session), `--ignore-user-config` and `--ignore-rules` (ambient user configuration cannot widen the guard), `-C <dir>`, `-m <model>`, and `--output-last-message <file>`. The result is read from that file because Codex interleaves progress with the answer on stdout; the read is strict and an absent or blank file is an error. Anything older than `0.149.0` is refused, since that is the only flag surface verified here. Review runs against the same materialized snapshot directory the OpenCode adapter uses. A project-level `.codex/` configuration is still read, so the adapter claims sandboxed workspace immutability, not a configuration-free run; see `codex-adapter.md`.
