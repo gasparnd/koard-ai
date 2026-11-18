@@ -92,6 +92,10 @@ type Options struct {
 	// VerifierInstructions are trusted application instructions, never recalled
 	// memory content. They are persisted with the verifier's exact request.
 	VerifierInstructions string
+	// Initialize persists optional application metadata after exclusive claim,
+	// before any handoff or provider call. A failure settles the run as failed.
+	// It is trusted application code, never model-supplied authority.
+	Initialize func(runDir string) error
 }
 
 // Outcome is the persisted record of one routed workflow.
@@ -146,6 +150,11 @@ func Route(ctx context.Context, options Options) (Outcome, error) {
 		return Outcome{}, err
 	}
 	defer route.events.Close()
+	if options.Initialize != nil {
+		if err := options.Initialize(route.dir); err != nil {
+			return route.settle(fmt.Errorf("initialize workflow: %w", err))
+		}
+	}
 
 	return route.settle(route.run(ctx))
 }

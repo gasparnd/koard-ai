@@ -23,6 +23,12 @@ storage configuration, failure handling, and the limits of model-based assessmen
 
 Requirements: Go 1.23 or newer.
 
+`koard odd run` accepts the same options as `run` and starts a guided ODD workflow
+through authorized apply. `koard odd status --workflow <id>` reads progress and
+the next explicit action; it never grants consent or executes that action. ODD
+completes only when application is registered for a verified receipt. See
+[ODD runtime](docs/odd-runtime.md) for scope and limits.
+
 ```bash
 go test ./...
 go run ./cmd/koard init

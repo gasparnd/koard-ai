@@ -1,6 +1,9 @@
 # Self-hosting Koard
 
-Koard should eventually use its own orchestration model to develop Koard. The CLI now routes read-only agents through `koard run`, including real planning with `--policy planned`; it does not yet execute the complete ODD workflow engine. See [routing.md](routing.md).
+Koard can guide its own bounded proposal workflows through `koard odd run` and
+`koard odd status`, including real planning with `--policy planned`. Review,
+correction and apply require their existing explicit commands and decisions.
+This is not autonomous development or delivery. See [odd-runtime.md](odd-runtime.md).
 
 ## Current bootstrap
 
@@ -12,7 +15,8 @@ The repository exposes its intent through:
 - `.koard/workflows/odd.md`, the workflow contract under development;
 - `docs/roadmap.md`, the source of truth for implemented capabilities.
 
-Until the workflow engine exists, humans and host runtimes enforce these documents.
+Humans and host runtimes still interpret business scope and enforce these documents;
+the guided runtime records technical preflight and tracks progress through apply.
 
 ## Target feedback loop
 

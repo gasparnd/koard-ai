@@ -60,7 +60,7 @@ The router validates options and every request before execution, binds each resu
 
 State files are written atomically, and a workflow identity is claimed with an atomic directory creation so a concurrent or replayed run fails instead of interleaving files. A claimed identity always leaves a readable record: every step writes through one object with a single persist point, so a run that stops still persists `workflow.json` with status `failed`, keeping the steps that did complete. The failure is also recorded as a diagnostic in `events.jsonl`, naming the handoff that was executing and the cause. Each hop after the first carries the previous result as a digest-bound `Context` reference, so the next role inspects the exact persisted bytes instead of a paraphrase. The router never mutates the workspace, never performs delivery operations, and never authorizes a model-returned `next` transition.
 
-Provider execution enters through one injected runner interface. The OpenCode and Codex adapters satisfy it structurally, so the core keeps its inward-only dependency direction. `koard run` selects the policy and composes providers by destination role using `agents.planner`, `agents.executor`, and `agents.verifier`; required unresolved choices fail before run state is created. A run cancelled through its context before it starts claims no identity; one cancelled after it starts stops before the next handoff and records a `KOARD_WORKFLOW_CANCELLED` warning instead of a failure. ODD state-machine integration, arbitrary/conditional policies, retries, and resuming an incomplete workflow remain later work. See [routing.md](routing.md) for commands, evidence resolution, and authority boundaries.
+Provider execution enters through one injected runner interface. The OpenCode and Codex adapters satisfy it structurally, so the core keeps its inward-only dependency direction. `koard run` selects the policy and composes providers by destination role using `agents.planner`, `agents.executor`, and `agents.verifier`; required unresolved choices fail before run state is created. A run cancelled through its context before it starts claims no identity; one cancelled after it starts stops before the next handoff and records a `KOARD_WORKFLOW_CANCELLED` warning instead of a failure. The guided `odd run` entry point adds application-owned preparation inside the same claim; arbitrary/conditional policies, retries, and resuming an incomplete proposal workflow remain later work. See [routing.md](routing.md) for commands, evidence resolution, and authority boundaries.
 
 ## Candidate identity
 
@@ -151,8 +151,19 @@ The router accepts optional application context and verifier instructions, persi
 the exact request sent to each role. CLI evidence resolution reuses snapshot confinement
 and digest checking, rejects recall file identities as source evidence, and reverses
 provider path translation before handoff validation. Memory failures warn separately
-without changing a successfully completed workflow's status. ODD runtime wiring is
-still deferred.
+without changing a successfully completed workflow's status. The guided ODD entry
+point reuses this composition.
+
+## Guided ODD application
+
+`internal/application/oddworkflow` composes router, ODD machine, consent, review and
+apply contracts without importing adapters. `odd run` persists technical preparation
+inside the router's exclusive claim, before invoking any provider. `odd status`
+derives progress from existing evidence without writing state or granting authority.
+ODD remains open through explicit consent, review and correction, and completes only
+for a registered apply matching the verified receipt. A corrected receipt uses its
+own target. Legacy `run` stays unchanged. See [odd-runtime.md](odd-runtime.md) for
+phase scope, read-only status and failure behavior.
 
 ## Runtime adapters
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role. The same adapter also implements `review.Reviewer`: before a review or correction invocation, `snapshot.Materialize` reconstructs the exact reviewed snapshot as an ordinary file tree in a disposable temporary directory (verifying every entry's digest as it writes), so the adapter's read-only session inspects precisely those bytes — never the live, possibly-drifted workspace — and the directory is removed as soon as the invocation returns.

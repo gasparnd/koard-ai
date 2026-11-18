@@ -13,6 +13,7 @@ import (
 
 	"github.com/koard-ai/koard/internal/adapters/codex"
 	"github.com/koard-ai/koard/internal/adapters/opencode"
+	"github.com/koard-ai/koard/internal/application/oddworkflow"
 	"github.com/koard-ai/koard/internal/config"
 	"github.com/koard-ai/koard/internal/core/agentrouter"
 	"github.com/koard-ai/koard/internal/core/handoff"
@@ -35,6 +36,15 @@ var workflowProvider = func(cwd string, agent config.AgentConfig) (agentrouter.R
 }
 
 func runWorkflow(args []string, cwd string, stdout, stderr io.Writer) int {
+	return runWorkflowMode(args, cwd, stdout, stderr, false)
+}
+
+func runWorkflowMode(args []string, cwd string, stdout, stderr io.Writer, guided bool) int {
+	usage, name := runUsage, "run"
+	if guided {
+		usage = strings.Replace(runUsage, "koard run", "koard odd run", 1)
+		name = "odd run"
+	}
 	flags := flag.NewFlagSet("run", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	id := flags.String("workflow", "", "Workflow identity")
@@ -42,26 +52,30 @@ func runWorkflow(args []string, cwd string, stdout, stderr io.Writer) int {
 	objective := flags.String("objective", "", "Requested outcome")
 	policy := flags.String("policy", agentrouter.PolicyFixed, "Routing policy")
 	if err := flags.Parse(args); errors.Is(err, flag.ErrHelp) {
-		fmt.Fprintln(stdout, runUsage)
+		fmt.Fprintln(stdout, usage)
 		return 0
 	} else if err != nil {
-		fmt.Fprintf(stderr, "koard run: %v\n%s\n", err, runUsage)
+		fmt.Fprintf(stderr, "koard %s: %v\n%s\n", name, err, usage)
 		return 2
 	}
 	if flags.NArg() != 0 || strings.TrimSpace(*id) == "" || strings.TrimSpace(*task) == "" || strings.TrimSpace(*objective) == "" {
-		fmt.Fprintln(stderr, "koard run: workflow, task, and objective are required; positional arguments are not supported")
-		fmt.Fprintln(stderr, runUsage)
+		fmt.Fprintf(stderr, "koard %s: workflow, task, and objective are required; positional arguments are not supported\n", name)
+		fmt.Fprintln(stderr, usage)
 		return 2
 	}
-	err := executeWorkflow(cwd, *id, *task, *objective, *policy, stdout, stderr)
+	err := executeWorkflowMode(cwd, *id, *task, *objective, *policy, stdout, stderr, guided)
 	if err != nil {
-		fmt.Fprintf(stderr, "koard run: %v\n", err)
+		fmt.Fprintf(stderr, "koard %s: %v\n", name, err)
 		return 1
 	}
 	return 0
 }
 
 func executeWorkflow(cwd, id, task, objective, policy string, stdout, stderr io.Writer) error {
+	return executeWorkflowMode(cwd, id, task, objective, policy, stdout, stderr, false)
+}
+
+func executeWorkflowMode(cwd, id, task, objective, policy string, stdout, stderr io.Writer, guided bool) error {
 	if err := agentrouter.ValidateWorkflowID(id); err != nil {
 		return err
 	}
@@ -89,6 +103,16 @@ func executeWorkflow(cwd, id, task, objective, policy string, stdout, stderr io.
 		}
 		runner.roles[step.To] = adapter
 	}
+	var preparation oddworkflow.Preparation
+	if guided {
+		if policy == "" {
+			policy = agentrouter.PolicyFixed
+		}
+		preparation, err = oddworkflow.Prepare(context.Background(), cwd, id, task, objective, policy, cfg)
+		if err != nil {
+			return err
+		}
+	}
 	stateDir := filepath.Join(cwd, ".koard", "state", "runs")
 	if err := os.MkdirAll(stateDir, 0755); err != nil {
 		return err
@@ -96,6 +120,16 @@ func executeWorkflow(cwd, id, task, objective, policy string, stdout, stderr io.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	options := agentrouter.Options{WorkflowID: id, TaskID: task, Objective: objective, Policy: policy, StateDir: stateDir, Workspace: cwd, Runner: runner}
+	initialized := false
+	if guided {
+		options.Initialize = func(dir string) error { err := preparation.Initialize(cwd, dir); initialized = err == nil; return err }
+	}
+	finish := func(runErr error) error {
+		if initialized {
+			return errors.Join(runErr, printODDStatus(cwd, id, stdout))
+		}
+		return runErr
+	}
 	var client memoryClient
 	memoryCWD := cwd
 	// A replay belongs to the router's existing refusal path, not a fresh memory
@@ -127,15 +161,15 @@ func executeWorkflow(cwd, id, task, objective, policy string, stdout, stderr io.
 		}
 	}
 	if err != nil {
-		return err
+		return finish(err)
 	}
 	if outcome.Status != handoff.StatusCompleted {
-		return fmt.Errorf("workflow %q stopped with status %q", id, outcome.Status)
+		return finish(fmt.Errorf("workflow %q stopped with status %q", id, outcome.Status))
 	}
 	if client != nil {
 		retainMemory(ctx, memoryCWD, id, client, stdout, stderr)
 	}
-	return nil
+	return finish(nil)
 }
 
 type workflowRunner struct {
