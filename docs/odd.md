@@ -53,4 +53,6 @@ It does not:
 - infer success from free-form agent text;
 - commit, push, merge, release, or grant delivery authority.
 
-The orchestrator will combine these snapshots with typed handoff results and the next roadmap capability: structured event and diagnostic output.
+The [guided ODD runtime](odd-runtime.md) combines this machine with typed preflight
+and existing handoff, consent, review, receipt and apply records. Its status is a
+read-only projection, not new authority or a fabricated event history.

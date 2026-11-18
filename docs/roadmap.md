@@ -56,6 +56,7 @@ Replay, idempotency, and recovery after the Koard process dies move to controlle
 - [x] Codex runtime adapter.
 - [x] Generalized Agent Router policies beyond the fixed route (`fixed` and `planned`, exposed through `koard run`).
 - [x] Engram memory adapter with scoped automatic recall, selective retention, and exact pending decisions.
+- [x] Guided ODD runtime through explicit consent, review/correction and registered apply; read-only progress projection.
 - [ ] End-to-end multi-runtime workflow with persisted handoffs and receipts.
 
 ## Portable skills
