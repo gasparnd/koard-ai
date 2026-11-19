@@ -166,6 +166,9 @@ own target. Legacy `run` stays unchanged. See [odd-runtime.md](odd-runtime.md) f
 phase scope, read-only status and failure behavior.
 
 ## Runtime adapters
+See [the adapter guide](adapters.md) for ownership boundaries, debugging by stage,
+and the checklist for adding a runtime without coupling the core.
+
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role. The same adapter also implements `review.Reviewer`: before a review or correction invocation, `snapshot.Materialize` reconstructs the exact reviewed snapshot as an ordinary file tree in a disposable temporary directory (verifying every entry's digest as it writes), so the adapter's read-only session inspects precisely those bytes — never the live, possibly-drifted workspace — and the directory is removed as soon as the invocation returns.
 
 This adapter is proposal-only. It requires OpenCode 2.2.3 or newer, disables snapshots, denies every tool by default, permits only repository `read`, `glob`, and `grep`, and disables MCP servers, skills, plugins, and web search for the run. It never enables auto-approval, worktrees, or session continuation. The adapter does not route roles, persist workflow state, produce candidate identities, mutate the workspace, or authorize delivery.
