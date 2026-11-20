@@ -308,7 +308,9 @@ type execRunner struct{}
 func (execRunner) Run(ctx context.Context, specification command) commandResult {
 	process := exec.CommandContext(ctx, specification.Name, specification.Args...)
 	process.Dir = specification.Dir
-	process.Env = mergeEnvironment(os.Environ(), specification.Env)
+	// Derive the environment after Dir: OpenCode uses PWD to select its
+	// Location, including when reviewing a disposable snapshot directory.
+	process.Env = mergeEnvironment(process.Environ(), specification.Env)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

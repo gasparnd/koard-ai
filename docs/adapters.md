@@ -78,6 +78,7 @@ is read-only. Use `koard review status --workflow <id>` for review state.
 | Version check refused | Executable/version and the adapter's supported flag surface | Remove the version gate to force execution |
 | Process/API failure, quota or timeout | Exit status and sanitized provider error category | Treat it as malformed result JSON or retry automatically |
 | Missing final file / incomplete event stream | Runtime output-channel framing | Fall back to progress text or an earlier answer |
+| Model reports existing files missing | Process cwd, inherited `PWD`, effective runtime Location, and safe tool error metadata | Assume files are absent or broaden permissions without evidence |
 | JSON decode failure / unknown field | Result field definitions and exact harmless field name | Ignore unknown fields, strip fences, or repair JSON |
 | Identity, role, target, attempt or digest mismatch | Original request and bound snapshot evidence | Rewrite identifiers to make the response pass |
 | Consent or stale receipt refusal | Exact candidate and lifecycle state | Treat a model verdict as authorization |
