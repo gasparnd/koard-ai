@@ -15,7 +15,7 @@ Delivery: local feature-branch-chain, no publishing; forecast about 400 authored
 
 ## Tasks
 
-- [x] T5 — S5 — inline — deterministic and live checks passed; commit/native review pending — synchronize inherited PWD with command directory; baseline `b35de98`. Risk: items 2/3 (snapshot inspection boundary and shared process runner). Independent verifier passed.
+- [x] T5 — S5 — inline — complete in `1e49288`; deterministic/live checks and native review passed — synchronize inherited PWD with command directory; baseline `b35de98`. Risk: items 2/3 (snapshot inspection boundary and shared process runner). Independent verifier passed.
 
 - [x] T4 — S4 — delegated command validation, inline authorized apply — completed through verified receipt and apply; ODD completed/applied — isolated all-Terra workflow. No product changes.
 
@@ -25,6 +25,8 @@ Delivery: local feature-branch-chain, no publishing; forecast about 400 authored
 - [ ] T2 — S1-S2 — inline with command worker and independent verifier — end-to-end proof still pending; prior OpenCode fix reviewed in `c8c0ea0`. T3 now proves one valid Codex planner handoff, not executor/verifier, candidate, receipt or apply. DeepSeek quota availability remains unverified.
 
 ## Log
+
+- L25 (2026-11-19): User selected "Revisar este cambio" for commit 1e49288. Native risk and reliability reviewers returned no findings; review-9cdc4a6cdc6f9b89 approved target sha256:38326c4f94276b0767f6211f63959d723887225378d0e3dbdd6e341b21e82598. Exact acknowledgement returned acknowledged / authority=burned. No correction or publication. T5 is complete; T2 mixed-runtime proof remains pending and needs authorization for a fresh bounded run. No additional fixture model calls occurred during closure.
 
 - L11 (2026-11-19): T3 RED observed through public Propose/Review for missing contract instructions; GREEN across all three proposal roles and review. Only prompt strings changed in production. Existing strict rejection/guard tests pass on base and current. Offline full suite (18 tested packages), vet, build, Codex race pass; 13 CLI differential comparisons preserve stdout/stderr/exit. Independent item-3 verifier found no blockers; imported its memory-boundary and nested-review-field probes and parent reran them successfully. Adapter guide links, ownership and composition points verified. No core contract or sandbox changes.
 - L12 (2026-11-19): One authorized current-worktree Codex 0.149.0 / gpt-5.6-terra planner probe passed in 16.151 seconds, exit 0: schema_version 1, role planner, status completed, exact handoff binding accepted by unchanged strict decoder. Two artifact references resolve to the two existing fixture files; optional digests absent, no evidence references. No downstream invocation, retry by harness, original-backend change or publication. Usage/internal retries/cost unknown. Parent read filtered result.json in codex-contract-validation-20261119/evidence under retained validation scratch. This establishes bounded planner success only, not original failure causality or end-to-end roadmap completion.
