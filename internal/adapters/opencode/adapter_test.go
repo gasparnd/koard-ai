@@ -29,7 +29,7 @@ func TestAdapterProposeReturnsBoundResult(t *testing.T) {
 
 	runner := &fakeRunner{responses: []commandResult{
 		{stdout: []byte("opencode v2.2.6\n")},
-		{stdout: validResultJSON("handoff-1", handoff.RoleExecutor)},
+		{stdout: transcript(validResultJSON("handoff-1", handoff.RoleExecutor))},
 	}}
 	adapter := testAdapter(t, runner)
 
@@ -90,7 +90,7 @@ func TestAdapterBuildsProposalOnlyInvocation(t *testing.T) {
 
 	runner := &fakeRunner{responses: []commandResult{
 		{stdout: []byte("opencode v2.2.6\n")},
-		{stdout: validResultJSON("handoff-1", handoff.RoleExecutor)},
+		{stdout: transcript(validResultJSON("handoff-1", handoff.RoleExecutor))},
 	}}
 	adapter := testAdapter(t, runner)
 
@@ -169,7 +169,7 @@ func TestAdapterRejectsInvalidOrUnboundOutput(t *testing.T) {
 
 			runner := &fakeRunner{responses: []commandResult{
 				{stdout: []byte("opencode v2.2.6\n")},
-				{stdout: test.output},
+				{stdout: transcript(test.output)},
 			}}
 			adapter := testAdapter(t, runner)
 
@@ -239,7 +239,7 @@ func TestAdapterReviewMaterializesSnapshotReturnsBoundResultAndCleansUp(t *testi
 		if string(content) != "package change\n" {
 			t.Fatalf("unexpected materialized content: %q", content)
 		}
-		return commandResult{stdout: mustMarshalReviewResult(t, review.Result{SchemaVersion: review.CurrentSchemaVersion, RequestID: request.ID, Attempt: request.Attempt, Target: request.Target, Verdict: review.VerdictApproved})}
+		return commandResult{stdout: transcript(mustMarshalReviewResult(t, review.Result{SchemaVersion: review.CurrentSchemaVersion, RequestID: request.ID, Attempt: request.Attempt, Target: request.Target, Verdict: review.VerdictApproved}))}
 	}}
 	adapter := testAdapter(t, runner)
 
@@ -339,7 +339,7 @@ func TestAdapterReviewRejectsInvalidOutput(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			runner := &fakeRunner{responses: []commandResult{{stdout: []byte("opencode v2.2.6\n")}, {stdout: test.output}}}
+			runner := &fakeRunner{responses: []commandResult{{stdout: []byte("opencode v2.2.6\n")}, {stdout: transcript(test.output)}}}
 			adapter := testAdapter(t, runner)
 
 			_, err := adapter.Review(context.Background(), request, snapshotDir)

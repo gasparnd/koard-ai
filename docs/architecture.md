@@ -166,9 +166,33 @@ own target. Legacy `run` stays unchanged. See [odd-runtime.md](odd-runtime.md) f
 phase scope, read-only status and failure behavior.
 
 ## Runtime adapters
+See [the adapter guide](adapters.md) for ownership boundaries, debugging by stage,
+and the checklist for adding a runtime without coupling the core.
+
+OpenCode's process environment is derived after setting its working directory,
+so inherited `PWD` cannot redirect inspection to the parent process's directory
+on Unix. Proposal runs use the configured workspace; reviews use the disposable
+materialized snapshot. This matters because OpenCode 2.2.6 prioritizes `PWD`
+over its process cwd. Other environment values and the inspection policy remain
+unchanged; this does not provide general instruction or configuration isolation.
+
 `internal/adapters/opencode` contains the first runtime adapter. It translates one validated handoff request into an archived standalone OpenCode run and accepts only one strict JSON result bound to that request's identity and destination role. The same adapter also implements `review.Reviewer`: before a review or correction invocation, `snapshot.Materialize` reconstructs the exact reviewed snapshot as an ordinary file tree in a disposable temporary directory (verifying every entry's digest as it writes), so the adapter's read-only session inspects precisely those bytes — never the live, possibly-drifted workspace — and the directory is removed as soon as the invocation returns.
 
 This adapter is proposal-only. It requires OpenCode 2.2.3 or newer, disables snapshots, denies every tool by default, permits only repository `read`, `glob`, and `grep`, and disables MCP servers, skills, plugins, and web search for the run. It never enables auto-approval, worktrees, or session continuation. The adapter does not route roles, persist workflow state, produce candidate identities, mutate the workspace, or authorize delivery.
+
+Proposal and review both request `--format json`: OpenCode emits NDJSON events,
+not the model result directly. The adapter binds events to one session, collects
+text suffixes by assistant message, and selects the completed final step by its
+start timestamp, including late reconciliation. Ambiguous ordering, incomplete
+steps, transport errors and non-stop final reasons are refused. Tool/reasoning
+content is never a result. The selected text still passes the strict domain
+decoder: no fence stripping, JSON repair, fallback to earlier answers or retry.
+Prompts describe the result fields and binding rules explicitly; they do not
+assume the model can resolve a schema URI. Explicit agent selection is preserved.
+Global/project instructions can still affect responses; this is not instruction
+isolation. Invalid final prose remains an error, and raw model output is not
+included in transport diagnostics. The event format is grounded in OpenCode
+[v2.2.6 source](https://github.com/anomalyco/opencode/blob/v2.2.6/packages/cli/src/run/noninteractive.ts).
 
 The capability guard travels as inline OpenCode configuration. OpenCode evaluates managed and Console policy after that inline configuration, so an administrator or connected workspace allow can widen the guard. Because the adapter never passes auto-approval, any permission that survives the guard still fails instead of being granted in the non-interactive run.
 

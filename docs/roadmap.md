@@ -57,7 +57,13 @@ Replay, idempotency, and recovery after the Koard process dies move to controlle
 - [x] Generalized Agent Router policies beyond the fixed route (`fixed` and `planned`, exposed through `koard run`).
 - [x] Engram memory adapter with scoped automatic recall, selective retention, and exact pending decisions.
 - [x] Guided ODD runtime through explicit consent, review/correction and registered apply; read-only progress projection.
-- [ ] End-to-end multi-runtime workflow with persisted handoffs and receipts.
+- [x] End-to-end multi-runtime workflow with persisted handoffs and receipts.
+
+Validated on an isolated two-file fixture with OpenCode/GPT-OSS → Codex/Terra →
+OpenCode/GPT-OSS, independent Terra review, a verified receipt, and explicitly
+authorized apply. The snapshot preserved existing fixture bytes: this proves
+cross-runtime orchestration and governed application, not generated source changes.
+See [the validation log](../odd/tasks/opencode-output.md) for evidence and limits.
 
 ## Portable skills
 

@@ -4,6 +4,9 @@
 
 ## Why a second adapter
 
+For the shared design, debugging stages, and new-runtime checklist, see
+[Understand, debug, and extend runtime adapters](adapters.md).
+
 The core decides *what* role must act and *what evidence* it must return. Providers decide *how* that request is performed. Until this milestone exactly one provider could perform it, which made "provider-neutral" a claim the repository could not yet demonstrate. A second adapter implemented against the same contracts — and selected by configuration rather than by code — is the evidence.
 
 ## The guard is the OS sandbox, not a per-tool policy
@@ -24,7 +27,7 @@ Every invocation is `codex exec` with exactly this surface:
 | `--skip-git-repo-check` | A review runs inside a materialized snapshot directory, which is deliberately not a git repository. |
 | `-s read-only` | The sandbox itself. |
 | `-C <dir>` | The workspace, or the materialized review snapshot — never anything else. |
-| `-m <model>` | The model from `agents.verifier.model`. |
+| `-m <model>` | The destination role's configured model for handoffs; `agents.verifier.model` for review/correction. |
 | `--color never` | Keeps operator-facing errors free of escape sequences. |
 | `--output-last-message <file>` | Where the result is read from, staged in a temporary directory outside the reviewed tree. |
 
@@ -35,6 +38,14 @@ The adapter never passes `--dangerously-bypass-approvals-and-sandbox`, `--approv
 Codex prints progress to stdout alongside the answer, so a decoder pointed at the stream would have to guess which line is the result. Instead the adapter stages a temporary directory, passes `--output-last-message`, and reads exactly that file. The read is strict: unknown fields are rejected, a second JSON value is rejected, and an absent or blank file is an error rather than an empty result.
 
 The staged directory is created outside the workspace and removed when the invocation returns.
+
+Both prompts explicitly describe Koard's result fields rather than assuming a
+schema URI is enough. Handoffs bind `handoff_id` and `role` to the request; reviews
+copy the request identity, attempt and entire target. Optional nested fields and
+allowed statuses/verdicts are described, and additional fields are prohibited.
+Core contracts, strict decoders and safety flags remain unchanged. A schema-valid
+answer still needs its binding and evidence checks; prompt instructions alone
+are not proof of compliance.
 
 ## Version gate
 

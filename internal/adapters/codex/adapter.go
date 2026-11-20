@@ -275,7 +275,21 @@ func decodeReviewResult(encoded []byte) (review.Result, error) {
 func proposalPrompt(request string) string {
 	return "Perform only repository inspection needed to answer this handoff. " +
 		"Do not modify files or perform delivery operations. Return exactly one JSON object " +
-		"that satisfies the requested handoff result schema, with no markdown fence or commentary.\n\n" +
+		"with no markdown fence or commentary. Required fields: schema_version (1), handoff_id (copy request.id), " +
+		"role (copy request.to), status (completed, blocked, or failed), summary (nonblank string). " +
+		"Optional artifacts and evidence are arrays of objects with kind, uri, and optional digest. " +
+		"Use existing repo://relative/path files for repository artifacts; never invent file bytes or digests. " +
+		"Optional next contains role and reason: role is planner, executor, or verifier; reason is nonblank. " +
+		"It is guidance, not authority. Optional memory_proposals is only for a completed verifier, at most 8 objects " +
+		"with type, title, content, rationale, evidence, sensitivity, and optional uncertainty. " +
+		"Type is decision, architecture, bugfix, pattern, config, discovery, or preference. " +
+		"Title, content, and rationale are nonblank and at most 256, 4096, and 1024 bytes respectively. " +
+		"Sensitivity is nonsensitive, sensitive, or unknown. Evidence contains 1 to 8 references copied exactly " +
+		"from request.context (kind, uri, digest), with nonblank kind at most 128 bytes, uri at most 2048 bytes, " +
+		"and lowercase sha256: plus 64 hexadecimal digits. Uncertainty contains at most 8 nonblank strings of at most 512 bytes. " +
+		"Memory proposals do not authorize persistence. Omit optional fields when unnecessary. " +
+		"No additional fields are allowed at any level. Do not fetch the schema URI; the result fields are defined here. " +
+		"If inspection is unavailable, return blocked with an honest summary.\n\n" +
 		"Handoff request:\n" + request
 }
 
@@ -283,7 +297,14 @@ func reviewPrompt(request string) string {
 	return "Independently review the exact snapshot materialized at the current working directory. " +
 		"Do not modify files or perform delivery operations. Cite findings only against the artifacts " +
 		"and digests named in the review request. Return exactly one JSON object that satisfies the " +
-		"requested review result schema, with no markdown fence or commentary.\n\n" +
+		"following result contract, with no markdown fence or commentary. Required fields: schema_version (1), " +
+		"request_id (copy request.id), attempt (copy request.attempt), target (copy the entire request.target object unchanged), " +
+		"verdict (approved, correction_required, or rejected). Optional findings is an array of objects with " +
+		"id, severity (warning or blocking), summary, and optional evidence. IDs and summaries must be nonblank. " +
+		"Finding evidence contains objects with only uri and digest matching the supplied snapshot entries exactly. " +
+		"correction_required requires at least one finding; approved must not contain blocking findings. " +
+		"No additional fields are allowed at any level: do not add reviewer identity or a top-level summary. " +
+		"Choose the verdict from observed evidence; never invent approval, findings, or digests.\n\n" +
 		"Review request:\n" + request
 }
 

@@ -117,29 +117,12 @@ func (adapter *Adapter) Propose(ctx context.Context, request handoff.Request) (h
 	if err != nil {
 		return handoff.Result{}, fmt.Errorf("marshal handoff request: %w", err)
 	}
-	prompt := proposalPrompt(string(encoded))
-	arguments := []string{
-		"run",
-		"--standalone",
-		"--archived",
-		"--model", adapter.model,
-	}
-	if adapter.agent != "" {
-		arguments = append(arguments, "--agent", adapter.agent)
-	}
-	arguments = append(arguments, prompt)
-
-	result := adapter.runner.Run(ctx, command{
-		Name: adapter.executable,
-		Args: arguments,
-		Dir:  adapter.workspace,
-		Env:  []string{"OPENCODE_CONFIG_CONTENT=" + proposalPolicy},
-	})
-	if result.err != nil {
-		return handoff.Result{}, commandError("run OpenCode proposal", result)
+	output, err := adapter.run(ctx, adapter.workspace, proposalPrompt(string(encoded)), "run OpenCode proposal")
+	if err != nil {
+		return handoff.Result{}, err
 	}
 
-	decoded, err := handoff.DecodeResult(bytes.NewReader(result.stdout))
+	decoded, err := handoff.DecodeResult(bytes.NewReader(output))
 	if err != nil {
 		return handoff.Result{}, fmt.Errorf("decode OpenCode proposal result: %w", err)
 	}
@@ -175,29 +158,12 @@ func (adapter *Adapter) Review(ctx context.Context, request review.Request, snap
 	if err != nil {
 		return review.Result{}, fmt.Errorf("marshal review request: %w", err)
 	}
-	prompt := reviewPrompt(string(encoded))
-	arguments := []string{
-		"run",
-		"--standalone",
-		"--archived",
-		"--model", adapter.model,
-	}
-	if adapter.agent != "" {
-		arguments = append(arguments, "--agent", adapter.agent)
-	}
-	arguments = append(arguments, prompt)
-
-	result := adapter.runner.Run(ctx, command{
-		Name: adapter.executable,
-		Args: arguments,
-		Dir:  materialized,
-		Env:  []string{"OPENCODE_CONFIG_CONTENT=" + proposalPolicy},
-	})
-	if result.err != nil {
-		return review.Result{}, commandError("run OpenCode review", result)
+	output, err := adapter.run(ctx, materialized, reviewPrompt(string(encoded)), "run OpenCode review")
+	if err != nil {
+		return review.Result{}, err
 	}
 
-	decoded, err := decodeReviewResult(result.stdout)
+	decoded, err := decodeReviewResult(output)
 	if err != nil {
 		return review.Result{}, fmt.Errorf("decode OpenCode review result: %w", err)
 	}
@@ -230,7 +196,12 @@ func reviewPrompt(request string) string {
 	return "Independently review the exact snapshot materialized at the current working directory. " +
 		"Do not modify files or perform delivery operations. Cite findings only against the artifacts " +
 		"and digests named in the review request. Return exactly one JSON object that satisfies the " +
-		"requested review result schema, with no markdown fence or commentary.\n\n" +
+		"following review result contract, with no markdown fence or commentary.\n" +
+		"Required fields: schema_version (1), request_id (copy request.id), attempt (copy request.attempt), " +
+		"target (copy the entire request.target object unchanged), verdict (approved, correction_required, or rejected). " +
+		"Optional findings is an array of objects with id, severity (warning or blocking), summary, " +
+		"and optional evidence array of objects with uri and digest from the supplied snapshot. " +
+		"Choose the verdict from observed evidence; do not invent approval, findings, fields, or digests.\n\n" +
 		"Review request:\n" + request
 }
 
@@ -295,7 +266,15 @@ func versionBefore(major, minor, patch, requiredMajor, requiredMinor, requiredPa
 func proposalPrompt(request string) string {
 	return "Perform only repository inspection needed to answer this handoff. " +
 		"Do not modify files or perform delivery operations. Return exactly one JSON object " +
-		"that satisfies the requested handoff result schema, with no markdown fence or commentary.\n\n" +
+		"with no markdown fence or commentary. Required fields: schema_version (1), handoff_id (copy request.id), " +
+		"role (copy request.to), status (completed, blocked, or failed), summary (nonempty string). " +
+		"Optional artifacts and evidence are arrays of objects with kind, uri, and optional digest. " +
+		"Reference only existing repository files using repo://relative/path; never invent file bytes or digests. " +
+		"Optional next is an object with role and reason; it is guidance, not authority. " +
+		"Optional memory_proposals is permitted only for a completed verifier: an array of objects with " +
+		"type, title, content, rationale, evidence (references with digests), sensitivity, and optional uncertainty (string array). " +
+		"Omit optional fields when unnecessary. If inspection is unavailable, return blocked with an honest summary. " +
+		"Do not fetch the schema URI; the result fields are defined here.\n\n" +
 		"Handoff request:\n" + request
 }
 
@@ -329,7 +308,9 @@ type execRunner struct{}
 func (execRunner) Run(ctx context.Context, specification command) commandResult {
 	process := exec.CommandContext(ctx, specification.Name, specification.Args...)
 	process.Dir = specification.Dir
-	process.Env = mergeEnvironment(os.Environ(), specification.Env)
+	// Derive the environment after Dir: OpenCode uses PWD to select its
+	// Location, including when reviewing a disposable snapshot directory.
+	process.Env = mergeEnvironment(process.Environ(), specification.Env)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
