@@ -18,8 +18,11 @@ import (
 )
 
 const MaxSelected = 5
-const MaxSelectionBytes = 128 * 1024
-const MaxInstructionsBytes = 384 * 1024
+
+// Both adapters use one argv element for the prompt. Leave headroom below
+// Linux's 128 KiB single-argument limit for adapter text and URI translation.
+const MaxSelectionBytes = 96 * 1024
+const MaxInstructionsBytes = 96 * 1024
 
 type entry struct {
 	ID          string `json:"id"`
@@ -62,7 +65,7 @@ func Freeze(ctx context.Context, project, home, runDir string, runner agentroute
 	}
 	// Bound metadata before writing evidence or spending a selector invocation.
 	metadata, _ := json.Marshal(s.entries())
-	if len(metadata) > MaxSelectionBytes/2 {
+	if len(metadata) > 64*1024 {
 		return nil, errors.New("skill catalog metadata exceeds 64 KiB")
 	}
 	if err := ctx.Err(); err != nil {
@@ -123,7 +126,7 @@ func (s *Session) Instructions(ctx context.Context, request handoff.Request) (st
 		return "", err
 	}
 	if len(encoded) > MaxSelectionBytes {
-		return "", errors.New("skill selection request exceeds 128 KiB")
+		return "", errors.New("skill selection request exceeds 96 KiB")
 	}
 	dir := filepath.Join(s.dir, string(request.To))
 	if err := os.Mkdir(dir, 0700); err != nil {
@@ -182,7 +185,18 @@ func (s *Session) Instructions(ctx context.Context, request handoff.Request) (st
 		}
 	}
 	if suffix.Len() > MaxInstructionsBytes {
-		return "", errors.New("selected skill instructions exceed 384 KiB")
+		return "", errors.New("selected skill instructions exceed 96 KiB")
+	}
+	// Count the complete serialized request, not just raw source bytes: JSON
+	// escaping and the original objective/context also consume argv capacity.
+	delivered := request
+	delivered.Objective += suffix.String()
+	encoded, err = handoff.MarshalRequest(delivered)
+	if err != nil {
+		return "", err
+	}
+	if len(encoded) > MaxSelectionBytes {
+		return "", errors.New("skill-enriched handoff exceeds 96 KiB serialized transport limit; select smaller skills or use --skills=off")
 	}
 	if err := ctx.Err(); err != nil {
 		return "", err

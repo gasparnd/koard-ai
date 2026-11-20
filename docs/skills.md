@@ -194,8 +194,15 @@ Selected source text is sent to the role's configured provider.
 | Captured winning skills | 128 entries, 1 MiB aggregate source bytes |
 | Individual source file | Existing 64 KiB registry limit |
 | Serialized catalog metadata | 64 KiB |
-| Serialized selection request | 128 KiB |
-| Selected instruction suffix | 384 KiB, at most five skills |
+| Serialized selection request | 96 KiB |
+| Selected instruction suffix | 96 KiB, at most five skills |
+| Complete serialized skill-enriched handoff | 96 KiB, including JSON escaping and original context |
+
+Both adapters carry prompts in a command-line argument. The serialized bounds
+leave headroom below Linux's 128 KiB single-argument limit for adapter text and
+reference translation. An oversized selection fails before delivery evidence
+or the main handoff is written; choose smaller skills or use `--skills=off`.
+No truncation, retry or automatic removal of selected instructions occurs.
 
 Skills provide guidance, not capabilities. The OpenCode runtime skill loader
 remains disabled; Koard delivers text through the existing prompt. Codex sandbox

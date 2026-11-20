@@ -174,6 +174,9 @@ func TestSkillTransportMatrix(t *testing.T) {
 							t.Fatal(err)
 						}
 						content := "\ufeff---\r\nname: local\r\ndescription: inspect task\r\n---\r\nBODY-SENTINEL café\r\n"
+						if mode == "auto" {
+							content += strings.Repeat("x", 60*1024)
+						}
 						source := ""
 						if mode != "empty" {
 							if mode == "off" {
