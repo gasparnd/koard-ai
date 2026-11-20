@@ -71,6 +71,8 @@ See [the validation log](../odd/tasks/opencode-output.md) for evidence and limit
   compatible discovery and optional strict Koard authoring checks. The initial
   planning and verification skills have [onboarding guides](skills.md).
 - [ ] `koard skill create` generator.
+- [x] Automatic contextual selection and exact instruction delivery for
+  `run`/`odd run`, with project-first discovery and explicit global opt-in.
 - [ ] Runtime-specific skill projection.
 - [ ] `koard sync` for generated settings.
 

@@ -14,13 +14,14 @@ import (
 	"github.com/koard-ai/koard/internal/adapters/codex"
 	"github.com/koard-ai/koard/internal/adapters/opencode"
 	"github.com/koard-ai/koard/internal/application/oddworkflow"
+	"github.com/koard-ai/koard/internal/application/skillselection"
 	"github.com/koard-ai/koard/internal/config"
 	"github.com/koard-ai/koard/internal/core/agentrouter"
 	"github.com/koard-ai/koard/internal/core/handoff"
 	"github.com/koard-ai/koard/internal/core/snapshot"
 )
 
-const runUsage = "Usage: koard run --workflow <id> --task <id> --objective <text> [--policy fixed|planned]"
+const runUsage = "Usage: koard run --workflow <id> --task <id> --objective <text> [--policy fixed|planned] [--skills auto|off] [--global-skills]"
 
 // Construction never invokes a provider. All required roles are resolved before
 // a workflow is claimed; execution remains behind the core's read-only guard.
@@ -51,6 +52,8 @@ func runWorkflowMode(args []string, cwd string, stdout, stderr io.Writer, guided
 	task := flags.String("task", "", "Task identity")
 	objective := flags.String("objective", "", "Requested outcome")
 	policy := flags.String("policy", agentrouter.PolicyFixed, "Routing policy")
+	skills := flags.String("skills", "auto", "Automatic skill selection or off")
+	globalSkills := flags.Bool("global-skills", false, "Include supported global skill roots")
 	if err := flags.Parse(args); errors.Is(err, flag.ErrHelp) {
 		fmt.Fprintln(stdout, usage)
 		return 0
@@ -63,7 +66,11 @@ func runWorkflowMode(args []string, cwd string, stdout, stderr io.Writer, guided
 		fmt.Fprintln(stderr, usage)
 		return 2
 	}
-	err := executeWorkflowMode(cwd, *id, *task, *objective, *policy, stdout, stderr, guided)
+	if *skills != "auto" && *skills != "off" {
+		fmt.Fprintln(stderr, "koard: skills must be auto or off")
+		return 2
+	}
+	err := executeWorkflowWithSkills(cwd, *id, *task, *objective, *policy, stdout, stderr, guided, *skills, *globalSkills)
 	if err != nil {
 		fmt.Fprintf(stderr, "koard %s: %v\n", name, err)
 		return 1
@@ -76,6 +83,10 @@ func executeWorkflow(cwd, id, task, objective, policy string, stdout, stderr io.
 }
 
 func executeWorkflowMode(cwd, id, task, objective, policy string, stdout, stderr io.Writer, guided bool) error {
+	return executeWorkflowWithSkills(cwd, id, task, objective, policy, stdout, stderr, guided, "auto", false)
+}
+
+func executeWorkflowWithSkills(cwd, id, task, objective, policy string, stdout, stderr io.Writer, guided bool, skills string, globalSkills bool) error {
 	if err := agentrouter.ValidateWorkflowID(id); err != nil {
 		return err
 	}
@@ -123,6 +134,30 @@ func executeWorkflowMode(cwd, id, task, objective, policy string, stdout, stderr
 	initialized := false
 	if guided {
 		options.Initialize = func(dir string) error { err := preparation.Initialize(cwd, dir); initialized = err == nil; return err }
+	}
+	if skills != "off" {
+		home := ""
+		if globalSkills {
+			home, err = os.UserHomeDir()
+			if err != nil {
+				return err
+			}
+		}
+		initialize := options.Initialize
+		var selection *skillselection.Session
+		options.Initialize = func(dir string) error {
+			if initialize != nil {
+				if err := initialize(dir); err != nil {
+					return err
+				}
+			}
+			var err error
+			selection, err = skillselection.Freeze(ctx, cwd, home, dir, runner)
+			return err
+		}
+		options.Instructions = func(ctx context.Context, request handoff.Request) (string, error) {
+			return selection.Instructions(ctx, request)
+		}
 	}
 	finish := func(runErr error) error {
 		if initialized {

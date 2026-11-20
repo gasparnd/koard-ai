@@ -42,6 +42,8 @@ limits and evaluation examples for contributors.
 
 The registry discovers project skills from disk; no manual index is required.
 Run `koard skill validate --strict` and register each project skill in `AGENTS.md`
-until runtime projection is implemented. Strict validation checks required
+for contributor discovery. Workflow selection reads descriptions automatically;
+write specific activation hints without embedding instructions in descriptions.
+Strict validation checks required
 metadata and the ordered headings, not the semantic quality of instructions.
 Third-party skills use the compatible validator instead; see [skills](skills.md).

@@ -64,8 +64,9 @@ tests; do not introduce it through prose.
 
 ## Current integration limit
 
-The registry discovers this skill but does not automatically deliver it to
-Koard's verifier. Runtime projection remains planned. Neither discovery nor
-manual loading changes sandbox permissions, review consent or delivery authority.
+`run` and `odd run` may automatically select this skill and deliver its exact
+captured instructions; selection is contextual rather than forced by role.
+Runtime-native registration remains planned. Neither selection nor manual
+loading changes sandbox permissions, review consent or delivery authority.
 See [skills](../skills.md), [handoffs](../handoffs.md) and
 [independent review](../independent-review.md).

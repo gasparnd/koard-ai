@@ -208,9 +208,14 @@ does not alter the configuration or handoff schemas. Project precedence and
 diagnostics are deterministic; see [skills](skills.md) for the public contract.
 
 The two project-authored skills describe planning and verification methods.
-Registry discovery does not select them for a task or load them into a runtime.
-Automatic selection and projection remain separate future work; permissions,
-consent, result validation and transitions stay in the executable harness.
+`internal/application/skillselection` freezes winning source bytes within a
+claimed workflow and uses each role's runner to select allowlisted IDs/digests.
+An optional router callback appends only Objective text before request
+persistence. `run`/`odd run` compose this by default; empty catalogs and explicit
+off preserve prior execution. Review/correction factories remain separate.
+Audit sidecars record provenance, not authority; see [skills](skills.md) for
+costs, bounds and proof limits. Permissions, consent, result validation and
+transitions stay in the executable harness.
 
 ## Project layout
 

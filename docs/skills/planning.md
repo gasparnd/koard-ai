@@ -64,7 +64,8 @@ the handoff schema or embed framework policy in the skill.
 
 ## Current integration limit
 
-The registry can discover this skill, but Koard does not yet inject it into
-planner invocations. A host agent may explicitly load it under that host's
-permissions. Automatic role selection and runtime projection remain planned;
-see [the registry guide](../skills.md) and [roadmap](../roadmap.md).
+`run` and `odd run` may automatically select this skill for a relevant assignment
+and append its exact captured instructions. Selection is contextual, not forced
+by role. `--skills=off` disables it. A host agent may also explicitly load it
+under that host's permissions. Runtime-native registration remains planned;
+see [the registry guide](../skills.md) for costs and limits.

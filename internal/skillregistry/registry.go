@@ -52,12 +52,19 @@ type scanner struct {
 	roots   []root
 	winners map[string]string
 	strict  bool
+	capture bool
+	sources []Source
+	bytes   int
 }
 
 // Scan uses project roots only unless home is explicitly supplied by the caller.
 // All candidates are validated, including duplicates hidden by earlier roots.
 func Scan(project, home string, strict bool) (Report, error) {
 	s := scanner{report: Report{Skills: []Skill{}, Diagnostics: []Diagnostic{}}, winners: map[string]string{}, strict: strict}
+	return s.scan(project, home)
+}
+
+func (s *scanner) scan(project, home string) (Report, error) {
 	for _, group := range []struct {
 		base, scope string
 		paths       []string
@@ -220,6 +227,14 @@ func (s *scanner) candidate(dir, scope string) bool {
 	}
 	s.winners[skill.Name] = path
 	s.report.Skills = append(s.report.Skills, skill)
+	if s.capture {
+		if len(s.sources) >= MaxCatalogSkills || s.bytes+len(data) > MaxCatalogBytes {
+			s.issue("catalog_limit", path, errors.New("skill catalog exceeds 128 skills or 1 MiB"))
+		} else {
+			s.sources = append(s.sources, Source{Skill: skill, Content: string(data)})
+			s.bytes += len(data)
+		}
+	}
 	return true
 }
 

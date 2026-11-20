@@ -48,7 +48,10 @@ go run ./cmd/koard review correction status --workflow <id>
 global skills without installing or loading them. `koard skill validate` checks
 compatibility; add `--strict` for Koard's authoring format. Start with the
 [skill registry guide](docs/skills.md) and the documented planning/verification
-skills. Automatic runtime projection and skill generation remain planned.
+skills. `run` and `odd run` automatically select and deliver project skills;
+use `--skills=off` to disable selection or `--global-skills` to include supported
+global sources. Nonempty catalogs add one model invocation per executed role.
+Skill generation and runtime-native registration remain planned.
 
 Start with [docs/README.md](docs/README.md). It explains the architecture, roadmap, contribution workflow, and how Koard will use itself during development.
 
