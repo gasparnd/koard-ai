@@ -88,8 +88,9 @@ control characters. YAML duplicate keys and malformed documents are errors.
 
 Strict authoring additionally requires an explicit lowercase hyphenated name,
 license, `metadata.author`, `metadata.version`, and the six ordered level-two
-headings from the [style guide](skill-style-guide.md). Headings inside fenced
-examples are ignored. These checks verify structure, not instruction quality,
+headings from the [style guide](skill-style-guide.md). Ordinary triple-backtick
+examples are ignored; indented or mixed/longer fences can be misclassified by
+the current lightweight heading parser. These checks verify structure, not instruction quality,
 truthfulness or model compliance. Do not impose Koard-specific headings on
 existing third-party skills just to discover them.
 
@@ -98,6 +99,17 @@ directory. Nonregular files and symlink escapes are rejected. Discovery is not
 a sandbox against a concurrently hostile filesystem; do not scan untrusted
 mounts while another process replaces their directories. No skill body is
 included in the registry report and no instruction is executed.
+
+## Initial Koard skills
+
+| Skill | Purpose | Contributor guide |
+|---|---|---|
+| `koard-planning` | Turn a bounded objective into a plan grounded in project evidence | [Planning](skills/planning.md) |
+| `koard-verification` | Check the requested outcome and distinguish observed proof from missing proof | [Verification](skills/verification.md) |
+
+They are language- and runtime-neutral. They direct agents to inspect the
+project's conventions and test commands instead of embedding Go, React or
+NestJS policy. They do not teach a model an unavailable capability.
 
 ## Architecture and contributing
 

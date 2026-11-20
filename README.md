@@ -44,6 +44,12 @@ go run ./cmd/koard review correction status --workflow <id>
 
 ## Documentation
 
+`koard skill list [--global] [--json]` discovers existing project and optionally
+global skills without installing or loading them. `koard skill validate` checks
+compatibility; add `--strict` for Koard's authoring format. Start with the
+[skill registry guide](docs/skills.md) and the documented planning/verification
+skills. Automatic runtime projection and skill generation remain planned.
+
 Start with [docs/README.md](docs/README.md). It explains the architecture, roadmap, contribution workflow, and how Koard will use itself during development.
 
 ## Design principles

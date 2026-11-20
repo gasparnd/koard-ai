@@ -15,6 +15,8 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 1. Read `architecture.md`.
 2. Follow `contributing.md`.
 3. Use `self-hosting.md` to understand the repository's AI workflow.
+4. Read [skills](skills.md) to understand instruction discovery and contribute
+   portable skills; follow the planning and verification guides linked there.
 
 ### I am an AI agent
 
@@ -43,3 +45,6 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | `routing.md` | Read-only CLI execution, policies, role providers, and evidence |
 | `self-hosting.md` | How Koard will understand and improve itself |
 | `skill-style-guide.md` | Contract for project-level skills |
+| `skills.md` | Discovery, precedence, compatible validation, safety and contributor walkthrough |
+| `skills/planning.md` | Why bounded planning matters, its contract and evaluation examples |
+| `skills/verification.md` | Evidence-based verification and its separation from independent review |
