@@ -24,6 +24,9 @@ go vet ./...
 - CLI output is a user-facing contract and requires tests.
 - Generated files must identify their source and remain reproducible.
 - A skill must follow `docs/skill-style-guide.md` and be registered before use.
+- For skill changes, run `go run ./cmd/koard skill validate --strict`. Document
+  each skill's purpose, inputs, outputs, limits and examples for new contributors;
+  [the registry guide](skills.md) explains the full workflow and compatibility rules.
 
 ## Pull requests
 

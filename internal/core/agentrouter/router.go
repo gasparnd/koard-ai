@@ -96,6 +96,10 @@ type Options struct {
 	// before any handoff or provider call. A failure settles the run as failed.
 	// It is trusted application code, never model-supplied authority.
 	Initialize func(runDir string) error
+	// Instructions supplies an optional Objective suffix before persistence.
+	// Only trusted application code may install it; it cannot replace identity,
+	// capabilities or context. Failure stops before the main handoff starts.
+	Instructions func(context.Context, handoff.Request) (string, error)
 }
 
 // Outcome is the persisted record of one routed workflow.
@@ -215,6 +219,22 @@ func (route *routing) run(ctx context.Context) error {
 			return &cancelled{handoffID: request.ID, cause: err}
 		}
 
+		if route.options.Instructions != nil {
+			input := request
+			input.Context = append([]handoff.Reference(nil), request.Context...)
+			input.Capabilities = append([]string(nil), request.Capabilities...)
+			suffix, err := route.options.Instructions(ctx, input)
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return &cancelled{handoffID: request.ID, cause: ctxErr}
+			}
+			if err != nil {
+				return fmt.Errorf("prepare handoff instructions: %w", err)
+			}
+			request.Objective += suffix
+			if err := request.Validate(); err != nil {
+				return err
+			}
+		}
 		if err := route.emit("handoff.started", "Handoff started.", request.ID); err != nil {
 			return err
 		}

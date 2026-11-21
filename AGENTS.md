@@ -19,6 +19,15 @@ This repository is developed by humans and AI agents. Before changing code, read
 - Add or update public-interface tests for every CLI behavior change.
 - Use English for code, identifiers, messages, and repository documentation.
 
+## Project skills
+
+- `skills/koard-planning/SKILL.md` — bounded, evidence-grounded task planning.
+- `skills/koard-verification/SKILL.md` — requirements verification with explicit proof limits.
+
+Load a matching skill before its assigned task; discovery alone is not activation.
+These files do not expand capabilities or replace the caller's output contract.
+See `docs/skills.md` for discovery, validation and contribution guidance.
+
 ## Current verification
 
 ```bash

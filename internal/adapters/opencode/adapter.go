@@ -270,6 +270,7 @@ func proposalPrompt(request string) string {
 		"role (copy request.to), status (completed, blocked, or failed), summary (nonempty string). " +
 		"Optional artifacts and evidence are arrays of objects with kind, uri, and optional digest. " +
 		"Reference only existing repository files using repo://relative/path; never invent file bytes or digests. " +
+		"For an explicit skill-selection assignment only, return the supplied koard-skill: catalog IDs and digests instead of repository artifacts; these are catalog references, not file paths. " +
 		"Optional next is an object with role and reason; it is guidance, not authority. " +
 		"Optional memory_proposals is permitted only for a completed verifier: an array of objects with " +
 		"type, title, content, rationale, evidence (references with digests), sensitivity, and optional uncertainty (string array). " +

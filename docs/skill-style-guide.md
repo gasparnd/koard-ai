@@ -35,4 +35,15 @@ Use this order:
 5. Output Contract
 6. References
 
-Keep `SKILL.md` focused on executable instructions. Move long explanations to `references/` and reusable templates to `assets/`. Register each project skill in the future Koard skill registry and in `AGENTS.md` until registry projection is implemented.
+Keep `SKILL.md` focused on executable instructions. Move long explanations to
+`references/` or a linked onboarding page under `docs/skills/`, and reusable
+templates to `assets/`. Explain each skill's purpose, activation, inputs, outputs,
+limits and evaluation examples for contributors.
+
+The registry discovers project skills from disk; no manual index is required.
+Run `koard skill validate --strict` and register each project skill in `AGENTS.md`
+for contributor discovery. Workflow selection reads descriptions automatically;
+write specific activation hints without embedding instructions in descriptions.
+Strict validation checks required
+metadata and the ordered headings, not the semantic quality of instructions.
+Third-party skills use the compatible validator instead; see [skills](skills.md).

@@ -198,6 +198,25 @@ The capability guard travels as inline OpenCode configuration. OpenCode evaluate
 
 `internal/adapters/codex` is the second runtime adapter, satisfying the same two contracts — `agentrouter.Runner` and `review.Reviewer` — with a different mechanism. Codex has no per-tool allow-list, so the guard is its OS-level read-only sandbox (`-s read-only`) instead of a policy document: a write attempt fails inside the sandbox rather than becoming an approval decision. Every invocation also passes `--ephemeral` (no resumable session), `--ignore-user-config` and `--ignore-rules` (ambient user configuration cannot widen the guard), `-C <dir>`, `-m <model>`, and `--output-last-message <file>`. The result is read from that file because Codex interleaves progress with the answer on stdout; the read is strict and an absent or blank file is an error. Anything older than `0.149.0` is refused, since that is the only flag surface verified here. Review runs against the same materialized snapshot directory the OpenCode adapter uses. A project-level `.codex/` configuration is still read, so the adapter claims sandboxed workspace immutability, not a configuration-free run; see `codex-adapter.md`.
 
+## Skill discovery boundary
+
+`internal/skillregistry` provides read-only filesystem discovery and structural
+validation. The CLI supplies the project directory and an explicit opt-in home
+directory; ordered roots yield source paths and descriptions, not executable
+authority. This package imports no runtime adapters or workflow machinery and
+does not alter the configuration or handoff schemas. Project precedence and
+diagnostics are deterministic; see [skills](skills.md) for the public contract.
+
+The two project-authored skills describe planning and verification methods.
+`internal/application/skillselection` freezes winning source bytes within a
+claimed workflow and uses each role's runner to select allowlisted IDs/digests.
+An optional router callback appends only Objective text before request
+persistence. `run`/`odd run` compose this by default; empty catalogs and explicit
+off preserve prior execution. Review/correction factories remain separate.
+Audit sidecars record provenance, not authority; see [skills](skills.md) for
+costs, bounds and proof limits. Permissions, consent, result validation and
+transitions stay in the executable harness.
+
 ## Project layout
 
 ```text

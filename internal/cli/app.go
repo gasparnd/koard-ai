@@ -77,6 +77,8 @@ func Run(args []string, cwd string, stdout, stderr io.Writer) int {
 		return runMemory(args[1:], cwd, stdout, stderr)
 	case "odd":
 		return runODD(args[1:], cwd, stdout, stderr)
+	case "skill":
+		return runSkill(args[1:], cwd, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "koard: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, "Run 'koard help' to see available commands.")
@@ -157,6 +159,10 @@ Commands:
              Start a guided ODD workflow through explicitly authorized apply
   odd status --workflow <id>
              Read current ODD progress and the next explicit action
+  skill list [--global] [--json]
+             Discover installed skills without loading instructions
+  skill validate [--global] [--strict] [--json]
+             Validate compatible skills or Koard authoring structure
   version    Print the CLI version
   help       Show this help`)
 }
