@@ -28,6 +28,23 @@ agents:
 
 ## Validation rules
 
+An optional `sync` section declares native skill projections explicitly:
+
+```yaml
+sync:
+  skills:
+    - name: koard-planning
+      runtimes: [opencode, codex]
+```
+
+Omitting it, or using `skills: []`, selects nothing. Every entry requires a
+nonempty unique `name` and a nonempty list of nonempty unique `runtimes`.
+Unknown nested fields are rejected. These structural checks apply to `doctor`
+and every configuration consumer; `sync` additionally validates supported
+runtimes, portable names and filesystem availability before writing. It does
+not derive the list from `agents` or run automatically with workflows. See
+[the sync walkthrough](sync.md) for use cases, output and recovery.
+
 `koard doctor` requires:
 
 - exactly one YAML document;
@@ -61,3 +78,8 @@ Success prints the validated schema version and exits with code `0`. A missing o
 ## Compatibility policy
 
 Adding a future schema version requires an explicit parser and migration policy. Koard must not silently reinterpret an older or newer configuration as version `1`.
+
+`sync` is an optional addition to schema version 1. Existing files remain valid
+without modification. Older Koard builds with strict parsers reject this new
+field; upgrade the executable before adding it. The command never edits the
+configuration itself.

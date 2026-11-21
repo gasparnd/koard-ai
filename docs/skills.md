@@ -135,6 +135,10 @@ To add a skill:
 
 ## Automatic selection during workflows
 
+For native interactive sessions outside Koard, use
+[`koard skill project`](skills/project.md) to link one existing skill into
+OpenCode or Codex discovery. This does not replace or widen workflow delivery.
+
 `run` and `odd run` automatically select relevant skills from project roots.
 Listing remains read-only and metadata-only: JSON is the catalog interface,
 while `SKILL.md` remains the instruction source. No Gentle AI installation,
@@ -227,6 +231,8 @@ adapter prompt tests cover transport without live providers.
 
 ## What is not implemented
 
-Skill installation, model-generated authoring, settings synchronization and runtime-native
-skill registration remain planned. Koard owns transitions, typed-result
+Global skill installation, model-generated authoring and general runtime-settings
+synchronization remain planned. [`koard sync`](sync.md) can prepare explicitly
+declared native skill projections together. Local projection for OpenCode/Codex is explicit and
+non-overwriting. Koard owns transitions, typed-result
 validation, review consent and application authority in executable code.

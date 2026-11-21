@@ -18,6 +18,17 @@ type Config struct {
 	Workflow      WorkflowConfig `yaml:"workflow"`
 	Memory        MemoryConfig   `yaml:"memory"`
 	Agents        AgentsConfig   `yaml:"agents"`
+	Sync          SyncConfig     `yaml:"sync,omitempty"`
+}
+
+// SyncConfig is optional. An absent or empty list never selects skills implicitly.
+type SyncConfig struct {
+	Skills []SyncSkill `yaml:"skills"`
+}
+
+type SyncSkill struct {
+	Name     string   `yaml:"name"`
+	Runtimes []string `yaml:"runtimes"`
 }
 
 type ProjectConfig struct {
@@ -105,6 +116,26 @@ func (config Config) Validate() error {
 	for _, field := range required {
 		if strings.TrimSpace(field.value) == "" {
 			return fmt.Errorf("%s is required", field.name)
+		}
+	}
+	seen := make(map[string]bool)
+	for i, skill := range config.Sync.Skills {
+		if strings.TrimSpace(skill.Name) == "" {
+			return fmt.Errorf("sync.skills[%d].name is required", i)
+		}
+		if seen[skill.Name] {
+			return fmt.Errorf("sync.skills contains duplicate name %q", skill.Name)
+		}
+		seen[skill.Name] = true
+		if len(skill.Runtimes) == 0 {
+			return fmt.Errorf("sync.skills[%d].runtimes must not be empty", i)
+		}
+		runtimes := make(map[string]bool)
+		for _, runtime := range skill.Runtimes {
+			if strings.TrimSpace(runtime) == "" || runtimes[runtime] {
+				return fmt.Errorf("sync.skills[%d].runtimes must contain nonempty unique values", i)
+			}
+			runtimes[runtime] = true
 		}
 	}
 

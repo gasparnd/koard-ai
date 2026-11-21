@@ -53,7 +53,14 @@ use `--skills=off` to disable selection or `--global-skills` to include supporte
 global sources. Nonempty catalogs add one model invocation per executed role.
 `koard skill create <name>` generates an inactive, editable draft and contributor
 guide without model calls or overwrites. Follow the [creation walkthrough](docs/skills/create.md)
-to edit, validate, review and manually activate it. Runtime-native registration remains planned.
+to edit, validate, review and manually activate it. `koard skill project --runtime
+opencode|codex <name>` links an existing project skill into native discovery
+without maintaining a second copy; see the [projection guide](docs/skills/project.md).
+
+Declare skill/runtime pairs under `sync.skills` in `.koard/koard.yaml`, then use
+`koard sync --dry-run` and `koard sync` to prepare them together. Only explicitly
+listed projections are managed; there are no overwrites, deletions or program
+updates. See the [sync walkthrough](docs/sync.md) for configuration and examples.
 
 Start with [docs/README.md](docs/README.md). It explains the architecture, roadmap, contribution workflow, and how Koard will use itself during development.
 

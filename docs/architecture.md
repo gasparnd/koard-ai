@@ -219,6 +219,19 @@ transitions stay in the executable harness.
 
 ## Project layout
 
+`internal/application/skillsync` composes complete-list preflight and ordered
+application through the existing projection service. The optional `sync.skills`
+configuration is explicit and independent of role-provider selection. CLI
+composition resolves adapters; the application neither rewrites configuration
+nor changes permissions. Partial application retains successful links for safe
+retry; removal and rollback are not implicit. See [sync](sync.md).
+
+`internal/application/skillprojection` exposes existing project skills through
+relative directory links. A provider-neutral `Target` interface lets the runtime
+adapters supply native discovery paths. CLI composition selects OpenCode or
+Codex; the service reuses the registry, refuses conflicts and never changes
+runtime configuration or workflow permissions. See [native projection](skills/project.md).
+
 ```text
 cmd/koard/        CLI executable
 internal/cli/     Command routing and user-facing behavior
