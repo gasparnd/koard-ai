@@ -67,3 +67,35 @@ func TestPreparationValidatesAndPublishesOnce(t *testing.T) {
 		t.Fatal("failed preparation published files")
 	}
 }
+
+func TestPreparationWithSyncStillRejectsConfigurationDrift(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".koard"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	text := "schema_version: 1\nproject:\n  name: example\nworkflow:\n  default: odd\nmemory:\n  provider: none\nagents:\n"
+	for _, role := range []string{"planner", "executor", "verifier"} {
+		text += "  " + role + ":\n    provider: codex\n    model: test\n"
+	}
+	text += "sync:\n  skills:\n    - name: testing\n      runtimes: [codex]\n"
+	path := filepath.Join(root, ".koard/koard.yaml")
+	if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Parse(strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := oddworkflow.Prepare(context.Background(), root, "demo", "task", "Goal", "fixed", cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Replace(text, "runtimes: [codex]", "runtimes: [opencode]", 1)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := oddworkflow.Prepare(context.Background(), root, "demo", "task", "Goal", "fixed", cfg); err == nil || err.Error() != "configuration changed during ODD preflight" {
+		t.Fatalf("drift accepted: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".agents")); !os.IsNotExist(err) {
+		t.Fatal("ODD preparation performed sync")
+	}
+}

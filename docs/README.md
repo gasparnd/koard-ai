@@ -32,6 +32,7 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | `adapters.md` | Runtime adapter purpose, request flow, troubleshooting, and extension checklist |
 | `codex-adapter.md` | The Codex runtime adapter: sandbox guard, invocation surface, provider selection |
 | `configuration.md` | Current configuration schema and validation rules |
+| `sync.md` | Explicit skill integrations: configuration, preview, use cases and conflict recovery |
 | `consent.md` | Candidate-bound consent for independent review |
 | `contributing.md` | Development workflow and checks |
 | `controlled-mutation.md` | The first real workspace-write capability: applying a receipted candidate |

@@ -8,7 +8,7 @@ Koard defines its own provider-neutral contracts, safety boundaries, and roadmap
 
 Koard is building its first governed orchestration slice. The current CLI can initialize a project and strictly validate its versioned configuration. The core defines provider-neutral handoffs, a versioned ODD state machine, and a strict JSON Lines contract for workflow events and diagnostics. A fixed planner → executor → verifier router executes one workflow and persists its handoffs and events under `.koard/state/runs/`. A completed executor result becomes a candidate whose identity is the SHA-256 digest of the proposal content, and the bytes of its `repo://` artifacts are captured as an immutable, verifiable snapshot that is assessed into a passive, medium, or high risk tier. An internal OpenCode adapter executes each proposal-only handoff with read-only capabilities and strict result binding — a second Codex adapter does the same through its OS-level read-only sandbox — and every routed handoff is refused if it asks for any capability beyond `repository:read`. `koard review mode` lets the user turn receipt-driven development on or off per clone or globally, with off winning. `koard review consent` records an immutable grant or decline for independent review of one exact workflow candidate snapshot; it never authorizes mutation or delivery. The provider-neutral independent-review core validates that authority, claims one lifecycle, persists immutable request/result evidence, and pauses for a separate correction decision; a granted decision spends the one permitted correction — a fresh corrector proposes a revised candidate, which is captured and independently re-reviewed — while a declined one settles the lifecycle as rejected and a second `correction_required` verdict escalates instead of looping. `koard review run`, `koard review status`, and `koard review correction <status|grant|decline>` expose this lifecycle end to end, backed by a runtime reviewer and corrector — OpenCode or Codex, chosen by `agents.verifier.provider` — that inspect the exact reviewed snapshot materialized into a disposable directory, never the live workspace. The instant a lifecycle settles approved, it issues one immutable, digest-verifiable receipt — no cryptographic signature, the same content-addressing every other artifact here uses — printed as one line by `review status`/`run`. That receipt rejects its own candidate as stale if `workflow.json` (the one artifact here that is not write-once) has drifted since approval. Snapshot integrity, reviewer independence, consent binding, and the one-correction limit are each enforced by name with their own tests; see `docs/independent-review.md`'s verification matrix for exactly where.
 
-`koard review apply --workflow <id>` is the first capability that ever writes to the real workspace: requiring nothing beyond that same approved, non-stale receipt, it writes the exact candidate's bytes atomically, with idempotency and interruption recovery that fall out of deterministic content rather than a write-ahead journal, and it never invokes git — delivery stays an entirely separate, human-driven decision. See `docs/controlled-mutation.md`. Engram memory is described below; skill generation remains planned.
+`koard review apply --workflow <id>` requires the same approved, non-stale receipt and writes that candidate's exact bytes atomically to the workspace, with idempotency and interruption recovery derived from deterministic content. It never invokes git — delivery stays a separate, human-driven decision. See `docs/controlled-mutation.md`. Local scaffolding commands (`init` and `skill create`) create project files separately; they do not apply workflow candidates. Engram memory and skill draft generation are described below.
 
 ## Quick start
 
@@ -51,7 +51,16 @@ compatibility; add `--strict` for Koard's authoring format. Start with the
 skills. `run` and `odd run` automatically select and deliver project skills;
 use `--skills=off` to disable selection or `--global-skills` to include supported
 global sources. Nonempty catalogs add one model invocation per executed role.
-Skill generation and runtime-native registration remain planned.
+`koard skill create <name>` generates an inactive, editable draft and contributor
+guide without model calls or overwrites. Follow the [creation walkthrough](docs/skills/create.md)
+to edit, validate, review and manually activate it. `koard skill project --runtime
+opencode|codex <name>` links an existing project skill into native discovery
+without maintaining a second copy; see the [projection guide](docs/skills/project.md).
+
+Declare skill/runtime pairs under `sync.skills` in `.koard/koard.yaml`, then use
+`koard sync --dry-run` and `koard sync` to prepare them together. Only explicitly
+listed projections are managed; there are no overwrites, deletions or program
+updates. See the [sync walkthrough](docs/sync.md) for configuration and examples.
 
 Start with [docs/README.md](docs/README.md). It explains the architecture, roadmap, contribution workflow, and how Koard will use itself during development.
 

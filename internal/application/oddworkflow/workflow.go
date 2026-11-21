@@ -66,7 +66,7 @@ func Prepare(ctx context.Context, cwd, id, task, objective, policy string, cfg c
 	if err != nil {
 		return Preparation{}, err
 	}
-	if parsed != cfg {
+	if !reflect.DeepEqual(parsed, cfg) {
 		return Preparation{}, errors.New("configuration changed during ODD preflight")
 	}
 	if cfg.Workflow.Default != "odd" {

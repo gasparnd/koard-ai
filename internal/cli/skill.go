@@ -11,6 +11,8 @@ import (
 )
 
 const skillHelp = `Usage:
+  koard skill create <name>
+  koard skill project --runtime opencode|codex [--dry-run] <name>
   koard skill list [--global] [--json]
   koard skill validate [--global] [--strict] [--json]
 
@@ -19,12 +21,20 @@ Discover project SKILL.md files without loading or executing instructions.
 --strict validates Koard authoring structure, not just compatible metadata.
 Project skills win duplicate names; diagnostics identify shadowed sources.
 Exit codes: 0 success, 1 discovery/validation errors, 2 invalid arguments.
-No registry files, settings or runtime state are written.`
+List and validate write no files. Create writes an editable draft and onboarding
+guide outside the project catalog; it never activates or overwrites a skill.
+Project links an existing skill into native discovery without changing settings.`
 
 func runSkill(args []string, cwd string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		fmt.Fprintln(stdout, skillHelp)
 		return 0
+	}
+	if args[0] == "create" {
+		return runSkillCreate(args[1:], cwd, stdout, stderr)
+	}
+	if args[0] == "project" {
+		return runSkillProject(args[1:], cwd, stdout, stderr)
 	}
 	if args[0] != "list" && args[0] != "validate" {
 		fmt.Fprintf(stderr, "koard skill: unknown command %q\n", args[0])

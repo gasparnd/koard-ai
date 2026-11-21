@@ -66,7 +66,9 @@ tests; do not introduce it through prose.
 
 `run` and `odd run` may automatically select this skill and deliver its exact
 captured instructions; selection is contextual rather than forced by role.
-Runtime-native registration remains planned. Neither selection nor manual
+Use [native projection](project.md) for OpenCode or Codex. Documentation paths
+in the skill resolve from the supplied project root, not its projected directory.
+Neither selection nor manual
 loading changes sandbox permissions, review consent or delivery authority.
 See [skills](../skills.md), [handoffs](../handoffs.md) and
 [independent review](../independent-review.md).

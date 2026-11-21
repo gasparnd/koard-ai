@@ -70,11 +70,17 @@ See [the validation log](../odd/tasks/opencode-output.md) for evidence and limit
 - [x] Skill registry and validation (`koard skill list` / `validate`), with
   compatible discovery and optional strict Koard authoring checks. The initial
   planning and verification skills have [onboarding guides](skills.md).
-- [ ] `koard skill create` generator.
+- [x] `koard skill create` deterministic draft generator with contributor onboarding;
+  review and activation remain manual. See the [walkthrough](skills/create.md).
 - [x] Automatic contextual selection and exact instruction delivery for
   `run`/`odd run`, with project-first discovery and explicit global opt-in.
-- [ ] Runtime-specific skill projection.
-- [ ] `koard sync` for generated settings.
+- [x] Local skill projection for OpenCode and Codex through non-overwriting
+  relative directory links; see the [native runtime guide](skills/project.md).
+- [x] `koard sync` first slice: explicitly declared skill projections, with
+  preview, complete preflight and no overwrites or deletion. See [sync](sync.md).
+
+General runtime-settings generation and migration remain deferred; `sync` does
+not update the Koard executable or rewrite native configuration files.
 
 ## Extended portability
 

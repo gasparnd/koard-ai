@@ -4,6 +4,11 @@ A Koard skill is a concise runtime instruction contract for an AI agent. It is n
 
 ## Required layout
 
+Start with `koard skill create <skill-name>` to generate an editable draft and
+its human guide outside the active catalog. Follow the [creation walkthrough](skills/create.md)
+to complete, validate and review it before manually moving it into this layout.
+Keep the generated README.md beside SKILL.md so their relative links survive.
+
 ```text
 skills/<skill-name>/
 ├── SKILL.md

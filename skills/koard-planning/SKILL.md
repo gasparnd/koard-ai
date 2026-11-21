@@ -47,6 +47,10 @@ planning assignment is complete, not that implementation or delivery occurred.
 
 ## References
 
-- [Planning onboarding](../../docs/skills/planning.md)
-- [Handoff contract](../../docs/handoffs.md)
-- [Skill boundaries](../../docs/skills.md)
+Resolve these repository-relative paths from the supplied project root, not
+from this skill's runtime discovery directory. If that root or a document is
+unavailable, report the missing context; do not substitute another repository.
+
+- Planning onboarding: `docs/skills/planning.md`
+- Handoff contract: `docs/handoffs.md`
+- Skill boundaries: `docs/skills.md`

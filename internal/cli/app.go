@@ -79,6 +79,8 @@ func Run(args []string, cwd string, stdout, stderr io.Writer) int {
 		return runODD(args[1:], cwd, stdout, stderr)
 	case "skill":
 		return runSkill(args[1:], cwd, stdout, stderr)
+	case "sync":
+		return runSync(args[1:], cwd, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "koard: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, "Run 'koard help' to see available commands.")
@@ -137,6 +139,8 @@ Usage:
 Commands:
   init       Create the project-level Koard structure
   doctor     Check the local Koard configuration
+  sync [--dry-run]
+             Synchronize explicitly configured skill projections without overwrites
   run --workflow <id> --task <id> --objective <text> [--policy fixed|planned]
              Run a read-only workflow with the configured provider for each role
   review mode <status|enable|disable> [--scope clone|global]
@@ -159,6 +163,10 @@ Commands:
              Start a guided ODD workflow through explicitly authorized apply
   odd status --workflow <id>
              Read current ODD progress and the next explicit action
+  skill create <name>
+             Create an inactive skill draft with contributor onboarding
+  skill project --runtime opencode|codex [--dry-run] <name>
+             Link an existing project skill into native runtime discovery
   skill list [--global] [--json]
              Discover installed skills without loading instructions
   skill validate [--global] [--strict] [--json]

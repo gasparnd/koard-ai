@@ -67,5 +67,7 @@ the handoff schema or embed framework policy in the skill.
 `run` and `odd run` may automatically select this skill for a relevant assignment
 and append its exact captured instructions. Selection is contextual, not forced
 by role. `--skills=off` disables it. A host agent may also explicitly load it
-under that host's permissions. Runtime-native registration remains planned;
-see [the registry guide](../skills.md) for costs and limits.
+under that host's permissions. Use [native projection](project.md) for OpenCode
+or Codex. The skill's documentation paths explicitly resolve from the supplied
+project root, not its projected directory. See [the registry guide](../skills.md)
+for costs and limits; projection never grants planning or execution authority.

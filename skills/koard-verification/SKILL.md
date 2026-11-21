@@ -49,7 +49,11 @@ do not fabricate test output or add fields unsupported by the supplied schema.
 
 ## References
 
-- [Verification onboarding](../../docs/skills/verification.md)
-- [Handoff contract](../../docs/handoffs.md)
-- [Independent review](../../docs/independent-review.md)
-- [Skill boundaries](../../docs/skills.md)
+Resolve these repository-relative paths from the supplied project root, not
+from this skill's runtime discovery directory. If that root or a document is
+unavailable, report the missing context; do not substitute another repository.
+
+- Verification onboarding: `docs/skills/verification.md`
+- Handoff contract: `docs/handoffs.md`
+- Independent review: `docs/independent-review.md`
+- Skill boundaries: `docs/skills.md`
