@@ -121,11 +121,13 @@ existing YAML dependency. No configuration schema or handoff schema changes.
 
 To add a skill:
 
-1. Follow the [style guide](skill-style-guide.md), with a concise `SKILL.md`.
+1. Start with `koard skill create <name>` and the [creation walkthrough](skills/create.md).
+   Complete the inactive draft using the [style guide](skill-style-guide.md).
 2. Add a human guide explaining why it exists, activation, inputs, outputs,
    limits and a realistic example. Link it from the skill's References.
-3. Register it in `AGENTS.md` and this page for contributor discoverability.
-4. Run compatible and strict validation for the project's authored skills.
+3. Validate drafts from `.koard/skill-drafts`, review the content, then manually
+   move the complete reviewed directory into `skills/` without overwriting.
+4. Register it in `AGENTS.md` and this page, and validate from the project root.
 5. When changing discovery, add public CLI tests in `internal/cli/skill_test.go`;
    use temporary project/home directories, never actual user skill folders.
 6. Run `go test ./...` and `go vet ./...` and update this reference alongside
@@ -225,6 +227,6 @@ adapter prompt tests cover transport without live providers.
 
 ## What is not implemented
 
-Skill installation, generation, settings synchronization and runtime-native
+Skill installation, model-generated authoring, settings synchronization and runtime-native
 skill registration remain planned. Koard owns transitions, typed-result
 validation, review consent and application authority in executable code.

@@ -159,6 +159,8 @@ Commands:
              Start a guided ODD workflow through explicitly authorized apply
   odd status --workflow <id>
              Read current ODD progress and the next explicit action
+  skill create <name>
+             Create an inactive skill draft with contributor onboarding
   skill list [--global] [--json]
              Discover installed skills without loading instructions
   skill validate [--global] [--strict] [--json]
