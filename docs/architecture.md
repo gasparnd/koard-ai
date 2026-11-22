@@ -166,6 +166,16 @@ own target. Legacy `run` stays unchanged. See [odd-runtime.md](odd-runtime.md) f
 phase scope, read-only status and failure behavior.
 
 ## Runtime adapters
+
+`internal/adapters/claude` implements workflow and review contracts with no model
+tools. Explicit handoff references (and one hop of typed prior-result evidence)
+are read through the shared snapshot confinement helper. Independent review
+packages verified snapshot text, not live files. Only the bounded serialized
+bundle reaches stdin; the process runs in an empty directory. Native claude.ai
+login metadata is checked without reading credentials. Tool/settings restrictions
+are not an OS sandbox; managed policy remains a trusted runtime dependency. See
+[Claude adapter](claude-adapter.md). The workflow/review factories and ODD preflight
+accept `claude` without changing core contracts or projection/sync targets.
 See [the adapter guide](adapters.md) for ownership boundaries, debugging by stage,
 and the checklist for adding a runtime without coupling the core.
 

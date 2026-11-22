@@ -2,7 +2,11 @@
 
 Independent review is Koard's read-only checkpoint between a consented candidate and any future mutation capability. It asks a fresh reviewer to inspect the exact bytes the user authorized—not whatever happens to be in the workspace later.
 
-The core lifecycle, the runtime-backed reviewer and corrector (OpenCode or Codex, whichever `agents.verifier.provider` selects), and the CLI surface all exist now: `koard review run`, `koard review status`, and `koard review correction`.
+The core lifecycle, the runtime-backed reviewer and corrector (OpenCode, Codex or Claude, selected by `agents.verifier.provider`), and the CLI surface all exist now: `koard review run`, `koard review status`, and `koard review correction`.
+
+Claude receives prepared snapshot text without tools, rather than inspecting a
+directory. Its correction handoff uses existing digest-bound references and
+refuses drift; it cannot edit files or run tests. See [Claude limits](claude-adapter.md).
 
 ## Why this layer exists
 
@@ -118,7 +122,7 @@ koard review correction decline --workflow <id>
 
 `run` resolves the current lifecycle itself: with no review yet, it runs the initial attempt; paused for correction with a decision already recorded, it runs that one correction; paused without a decision, it refuses and names the missing step; already settled (`approved`, `rejected`, `failed`, `escalated`), it refuses — there is nothing left to run. `status` and `correction status` never write anything.
 
-The reviewer and corrector are the project's existing `agents.verifier` configuration — independent review adds no config schema of its own. Its `provider` field selects the runtime adapter: `opencode` or `codex`. Any other value, including the `unset` that `koard init` writes while role selection is unresolved, fails closed with a message naming both supported providers instead of silently choosing one. `Materialize` (in the `snapshot` package) turns the exact reviewed snapshot back into an ordinary file tree in a disposable directory before each reviewer or corrector invocation, so a generic read-only coding agent can inspect it with its own tools without ever touching the live, possibly-drifted workspace; the directory is removed as soon as the invocation returns. See `codex-adapter.md` for how the Codex adapter enforces the same read-only guarantee with a sandbox instead of a per-tool policy.
+The reviewer and corrector use the project's existing `agents.verifier` configuration; independent review adds no config schema. Its `provider` selects `opencode`, `codex` or `claude`. Unknown values, including `unset`, fail closed with the supported choices rather than silently selecting one. OpenCode and Codex reviewers inspect a disposable materialized snapshot through their tools. Claude receives those exact snapshot bytes as prepared text and has no tools. Correction uses the existing digest-bound handoff references. See [Codex](codex-adapter.md) and [Claude](claude-adapter.md) for their different containment mechanisms and limits.
 
 ## Failure behavior
 

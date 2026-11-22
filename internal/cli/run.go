@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/koard-ai/koard/internal/adapters/claude"
 	"github.com/koard-ai/koard/internal/adapters/codex"
 	"github.com/koard-ai/koard/internal/adapters/opencode"
 	"github.com/koard-ai/koard/internal/application/oddworkflow"
@@ -27,6 +28,8 @@ const runUsage = "Usage: koard run --workflow <id> --task <id> --objective <text
 // a workflow is claimed; execution remains behind the core's read-only guard.
 var workflowProvider = func(cwd string, agent config.AgentConfig) (agentrouter.Runner, error) {
 	switch agent.Provider {
+	case "claude":
+		return claude.New(claude.Config{Workspace: cwd, Model: agent.Model})
 	case "opencode":
 		return opencode.New(opencode.Config{Workspace: cwd, Model: agent.Model})
 	case "codex":
@@ -102,8 +105,8 @@ func executeWorkflowWithSkills(cwd, id, task, objective, policy string, stdout, 
 	runner := workflowRunner{roles: make(map[handoff.Role]agentrouter.Runner), runPath: filepath.Join(".koard", "state", "runs", id)}
 	for _, step := range steps {
 		agent := agents[step.To]
-		if agent.Provider != "opencode" && agent.Provider != "codex" {
-			return fmt.Errorf("agents.%s.provider %q is unsupported; supported providers are %q and %q", step.To, agent.Provider, "opencode", "codex")
+		if agent.Provider != "opencode" && agent.Provider != "codex" && agent.Provider != "claude" {
+			return fmt.Errorf("agents.%s.provider %q is unsupported; supported providers are %q, %q and %q", step.To, agent.Provider, "opencode", "codex", "claude")
 		}
 		if strings.TrimSpace(agent.Model) == "" || agent.Model == "unset" {
 			return fmt.Errorf("agents.%s.model must select a model before execution", step.To)

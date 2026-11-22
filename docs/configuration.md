@@ -57,7 +57,7 @@ not derive the list from `agents` or run automatically with workflows. See
 
 The literal value `unset` is valid during bootstrap. It records that role selection remains intentionally unresolved without weakening structural validation.
 
-A resolved `provider` names a runtime adapter. `koard review run` currently accepts `opencode` and `codex` for `agents.verifier`, and fails closed on any other value — including `unset` — because review cannot run without a chosen runtime. See [codex-adapter.md](codex-adapter.md).
+A resolved `provider` names a runtime adapter. Workflow roles and `koard review run` accept `opencode`, `codex` and `claude`, and fail closed on any other value — including `unset`. Claude uses native subscription login and tool-free prepared context; see [claude-adapter.md](claude-adapter.md) for requirements and limits. This does not add `claude` to the separate projection/sync runtime list.
 
 ## Check a project
 

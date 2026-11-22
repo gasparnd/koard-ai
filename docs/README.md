@@ -31,6 +31,7 @@ This documentation is the shared map for users, contributors, and AI agents. It 
 | `architecture.md` | Components, contracts, and dependency direction |
 | `adapters.md` | Runtime adapter purpose, request flow, troubleshooting, and extension checklist |
 | `codex-adapter.md` | The Codex runtime adapter: sandbox guard, invocation surface, provider selection |
+| `claude-adapter.md` | Native Claude login, tool-free prepared context, examples and containment limits |
 | `configuration.md` | Current configuration schema and validation rules |
 | `sync.md` | Explicit skill integrations: configuration, preview, use cases and conflict recovery |
 | `consent.md` | Candidate-bound consent for independent review |

@@ -84,7 +84,8 @@ not update the Koard executable or rewrite native configuration files.
 
 ## Extended portability
 
-- [ ] Claude adapter.
+- [x] Claude Code tool-free adapter with native login, prepared text context and
+  immutable review bytes. Local fake-process validation only; see [limits](claude-adapter.md).
 - [ ] Copilot adapter.
 - [ ] Capability negotiation and model selection policies.
 - [ ] Migration and compatibility tooling.

@@ -7,6 +7,7 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/koard-ai/koard/internal/adapters/claude"
 	"github.com/koard-ai/koard/internal/adapters/codex"
 	"github.com/koard-ai/koard/internal/adapters/opencode"
 	"github.com/koard-ai/koard/internal/core/agentrouter"
@@ -30,6 +31,12 @@ var reviewProviders = func(cwd string) (reviewcore.Reviewer, agentrouter.Runner,
 	verifier := projectConfig.Agents.Verifier
 
 	switch verifier.Provider {
+	case "claude":
+		adapter, err := claude.New(claude.Config{Workspace: cwd, Model: verifier.Model})
+		if err != nil {
+			return nil, nil, reviewcore.ReviewerIdentity{}, err
+		}
+		return adapter, adapter, reviewcore.ReviewerIdentity{Runtime: "claude", Model: verifier.Model}, nil
 	case "opencode":
 		adapter, err := opencode.New(opencode.Config{Workspace: cwd, Model: verifier.Model})
 		if err != nil {
@@ -46,8 +53,8 @@ var reviewProviders = func(cwd string) (reviewcore.Reviewer, agentrouter.Runner,
 		return adapter, adapter, identity, nil
 	default:
 		return nil, nil, reviewcore.ReviewerIdentity{}, fmt.Errorf(
-			"agents.verifier.provider %q is unsupported; supported providers are %q and %q",
-			verifier.Provider, "opencode", "codex",
+			"agents.verifier.provider %q is unsupported; supported providers are %q, %q and %q",
+			verifier.Provider, "opencode", "codex", "claude",
 		)
 	}
 }
