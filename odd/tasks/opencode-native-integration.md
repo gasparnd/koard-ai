@@ -23,8 +23,8 @@ Implementation approach: project-local, explicit setup with preview, non-overwri
 
 ## Tasks
 
-- T1 [S1,S3] Native setup with public-interface tests and documentation — route: inline; status: deterministic checks complete, native proof pending T3; commit: pending. Risk: item 5 (installer/configuration behavior), item 2 (filesystem confinement).
-- T2 [S1,S2] Native orchestrator and bounded role/skill assets with tests and usage documentation — route: inline; status: structural checks complete, native proof pending T3; commit: pending. Risk: item 3 (consumed instructions), item 2 (authority boundaries).
+- T1 [S1,S3] Native setup with public-interface tests and documentation — route: inline; status: deterministic checks complete, native proof pending T3; commit: `ea21596`. Risk: item 5 (installer/configuration behavior), item 2 (filesystem confinement).
+- T2 [S1,S2] Native orchestrator and bounded role/skill assets with tests and usage documentation — route: inline; status: structural checks complete, native proof pending T3; commit: `ea21596`. Risk: item 3 (consumed instructions), item 2 (authority boundaries).
 - T3 [S1,S2,S3] Verify Engram host-binding integration and native end-to-end behavior; implement only evidence-supported wiring — route: inline, independent verifier for named risks; status: blocked on explicitly scoped native-session proof; commit: pending. Risk: item 2 (session attribution), item 5 (runtime integration). Missing native proof must remain explicit.
 
 ## Log
@@ -58,3 +58,6 @@ Observed RED: after correcting a test syntax typo, `go test ./internal/cli -run 
 Command worker final results: `go test ./...`, `go vet ./...`, source strict skill validation and installed strict skill validation passed. Initial isolated dependency-cache and harness-path errors were corrected. All 18 differential command cases (`--help` and `--dry-run` for nine existing commands) matched baseline stdout, stderr and exit codes exactly. Parent repeated source strict skill validation successfully.
 
 Independent verifier ran 26 isolated CLI invocations, including preview, installation, retry, argument failures and eight conflict fixtures. Rejected requests preserved file hashes, directories and symlink targets. No installer blocker reproduced. Returned a dangling-skill-symlink regression probe, added to the suite. S2 is supported at instruction-contract level; S1/S3 remain unmet until actual host activation, effective permissions, delegation and Engram continuity are verified. No host/model session was launched or global configuration changed. Native review mode is globally on; assessment remains pending after normalization and final checks.
+
+### L7 — Implementation commit and review assessment
+Commit `ea21596` contains the coherent setup behavior, assets, tests and docs (726 authored added/deleted lines, including tracking updates). The user selected one feature branch; no PR or publishing occurred. Final focused checks including the verifier probe and `git diff --check` passed. Native assessment against `e8d2a9e` returned `high`, `review_due: true`, reason `high_risk`, with item 5 escalation. Candidate-specific review consent is the next native transition; no review approval is claimed. T3 still needs explicitly scoped host-session proof and a working authoritative Engram integration.
