@@ -109,6 +109,40 @@ Thus save and search continuity are verified with the already installed Engram
 host adapter; full retrieval and attempted-write denial remain unverified.
 This does not add automatic Engram configuration to Koard's installer.
 
+### Deterministic proof without models
+
+With OpenCode and Engram already installed, explicitly opt in to isolated
+integration checks:
+
+```sh
+KOARD_NATIVE_PROOF=1 go test ./internal/adapters/engram ./internal/adapters/opencode -run '^TestNativeProof' -count=1 -v
+```
+
+The checks are skipped without that variable or with `go test -short`.
+When opted in, missing binaries or unsupported APIs fail rather than silently
+passing. No dependency installation, model prompt or production memory is used.
+Each test owns temporary storage and bounded child processes; OpenCode uses a
+fresh home/configuration/database and a generated local server password, not
+the user's credentials. This is not a packet-level network-isolation claim.
+
+Observed with OpenCode v2.2.6 and Engram 3.7.2:
+
+| Check | Observed result | What it does not establish |
+| --- | --- | --- |
+| Real Engram MCP `mem_get_observation` | Exact 10,224-byte synthetic content, including its final marker | The OpenCode host calling that tool or binding a write |
+| Real OpenCode session permission API | Both inspection agents deny `edit` and `shell`, and allow `read` | A tool invocation reaching the evaluator during a model turn |
+
+The permission test installs the shipped bundle and uses server-returned root
+and child session IDs. It calls the runtime's evaluator, not a reimplementation
+of its matching rules. The MCP test reuses Koard's existing owned Engram adapter
+to seed synthetic data, then reads through the actual MCP transport. These
+results complement, rather than replace, the earlier real-host smoke.
+
+The first exploratory API probe omitted local-server authentication and received
+401. The public server contract documents `OPENCODE_PASSWORD` and Basic auth
+with username `opencode`; the durable test uses a generated password for its
+own server. No authentication bypass or ambient credential reuse is involved.
+
 Configuration follows the official OpenCode V2 [agent](https://opencode.ai/docs/agents)
 and [configuration](https://opencode.ai/docs/config) contracts. Runtime upgrades
 need renewed compatibility evidence; other CLIs are not supported by setup yet.
