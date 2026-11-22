@@ -35,12 +35,12 @@ func TestProviderDispatchGuards(t *testing.T) {
 	t.Run("unknown", func(t *testing.T) {
 		t.Parallel()
 
-		project := writeProviderProject(t, "claude", "sonnet")
+		project := writeProviderProject(t, "unknown", "sonnet")
 		reviewer, corrector, _, err := reviewProviders(project)
 		if err == nil || reviewer != nil || corrector != nil {
 			t.Fatalf("unknown provider did not fail closed: %v", err)
 		}
-		for _, want := range []string{`"claude"`, `"opencode"`, `"codex"`} {
+		for _, want := range []string{`"unknown"`, `"claude"`, `"opencode"`, `"codex"`} {
 			if !strings.Contains(err.Error(), want) {
 				t.Fatalf("error %q does not name %s", err, want)
 			}

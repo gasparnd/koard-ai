@@ -12,6 +12,11 @@ Koard is building its first governed orchestration slice. The current CLI can in
 
 ## Quick start
 
+Claude Code is also available through `provider: claude`: Koard delivers prepared
+text context to a fresh, tool-free process using native login. It does not browse
+the repository or use an OS sandbox. See the [Claude walkthrough](docs/claude-adapter.md)
+for a mixed-runtime example, subscription prerequisites and verification limits.
+
 With `memory.provider: engram`, runs use shared Engram 3.7.2 storage with canonical
 project isolation, advisory recall, and selective verifier-proposed retention.
 Substantial uncertainty requires an exact `koard memory grant` or `decline`;

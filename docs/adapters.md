@@ -17,11 +17,15 @@ CLI selects the configured provider for the role
   → orchestrator records evidence and decides the next step
 ```
 
-`agentrouter.Runner.Execute` handles workflow handoffs. Both current adapters
+`agentrouter.Runner.Execute` handles workflow handoffs. The runtime adapters
 delegate it to `Propose`. `review.Reviewer.Review` handles independent review:
 the adapter materializes the supplied immutable snapshot with
 `snapshot.Materialize`, runs against those bytes, and cleans up the temporary
 tree. The review core validates result identity, target, attempt, and findings.
+
+Claude is tool-free: Koard packages explicit text references and verified snapshot
+bytes on stdin, then launches it in a separate empty directory. It cannot inspect
+the materialized tree itself. See [the Claude guide](claude-adapter.md).
 
 | Responsibility | Owner |
 |---|---|
@@ -48,6 +52,7 @@ progress stream as if it were already a result.
 |---|---|---|
 | OpenCode | `--format json` NDJSON; collect text suffixes and select the completed final step | Inline deny-by-default tool policy with repository inspection tools allowed |
 | Codex | Read the `--output-last-message` file, never progress stdout | `-s read-only` sandbox with ephemeral execution and user-config/rules suppression |
+| Claude Code | Decode the final `result` string from a successful JSON envelope | No model tools; bounded prepared context, empty cwd and native login |
 
 These are not equivalent isolation mechanisms. Ambient/project configuration
 limitations remain: consult [architecture](architecture.md#runtime-adapters)

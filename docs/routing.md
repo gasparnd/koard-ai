@@ -5,7 +5,7 @@
 ## Quick path
 
 1. Run `koard init` and configure `agents.executor` and `agents.verifier` in `.koard/koard.yaml`; configure `agents.planner` too for `planned`.
-2. Set each required provider to `opencode` or `codex` and its model to a real model identifier. Each runtime must already be installed and authenticated. Construction checks configuration; runtime/version failures are recorded when execution starts.
+2. Set each required provider to `opencode`, `codex` or `claude` and its model to a real model identifier. Each runtime must already be installed and authenticated. Construction checks configuration; runtime/version failures are recorded when execution starts. Claude is tool-free and requires prepared context rather than exploring files; start with the [mixed-runtime example](claude-adapter.md#quick-path).
 3. Run a new workflow identity:
 
 ```bash

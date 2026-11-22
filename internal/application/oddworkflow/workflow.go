@@ -87,7 +87,7 @@ func Prepare(ctx context.Context, cwd, id, task, objective, policy string, cfg c
 	agents := map[handoff.Role]config.AgentConfig{handoff.RolePlanner: cfg.Agents.Planner, handoff.RoleExecutor: cfg.Agents.Executor, handoff.RoleVerifier: cfg.Agents.Verifier}
 	for _, step := range steps {
 		a := agents[step.To]
-		if (a.Provider != "codex" && a.Provider != "opencode") || strings.TrimSpace(a.Model) == "" || a.Model == "unset" {
+		if (a.Provider != "codex" && a.Provider != "opencode" && a.Provider != "claude") || strings.TrimSpace(a.Model) == "" || a.Model == "unset" {
 			return Preparation{}, fmt.Errorf("unresolved provider/model for %s", step.To)
 		}
 		p.Roles = append(p.Roles, Role{step.To, a.Provider, a.Model})
@@ -152,7 +152,7 @@ func (p Preparation) validate(id string) error {
 	}
 	for i, s := range steps {
 		r := p.Roles[i]
-		if r.Role != s.To || (r.Provider != "codex" && r.Provider != "opencode") || strings.TrimSpace(r.Model) == "" || r.Model == "unset" {
+		if r.Role != s.To || (r.Provider != "codex" && r.Provider != "opencode" && r.Provider != "claude") || strings.TrimSpace(r.Model) == "" || r.Model == "unset" {
 			return errors.New("invalid ODD role resolution")
 		}
 	}
