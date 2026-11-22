@@ -23,9 +23,9 @@ Implementation approach: project-local, explicit setup with preview, non-overwri
 
 ## Tasks
 
-- T1 [S1,S3] Native setup with public-interface tests and documentation — route: inline; status: deterministic checks complete, native proof pending T3; commit: `ea21596`. Risk: item 5 (installer/configuration behavior), item 2 (filesystem confinement).
-- T2 [S1,S2] Native orchestrator and bounded role/skill assets with tests and usage documentation — route: inline; status: structural checks complete, native proof pending T3; commit: `ea21596`. Risk: item 3 (consumed instructions), item 2 (authority boundaries).
-- T3 [S1,S2,S3] Verify Engram host-binding integration and native end-to-end behavior; implement only evidence-supported wiring — route: inline, independent verifier for named risks; status: blocked on explicitly scoped native-session proof; commit: pending. Risk: item 2 (session attribution), item 5 (runtime integration). Missing native proof must remain explicit.
+- T1 [S1,S3] Native setup with public-interface tests and documentation — route: inline; status: setup and native activation verified; commit: `ea21596`. Risk: item 5 (installer/configuration behavior), item 2 (filesystem confinement).
+- T2 [S1,S2] Native orchestrator and bounded role/skill assets with tests and usage documentation — route: inline; status: native skill loading, delegation and fixture implementation verified; effective denial probe pending T3; commit: `ea21596`. Risk: item 3 (consumed instructions), item 2 (authority boundaries).
+- T3 [S1,S2,S3] Verify Engram host-binding integration and native end-to-end behavior; implement only evidence-supported wiring — route: inline, native probe execution delegated by the per-action rule; status: partial, blocked after bounded host timeout; commit: pending. Risk: item 2 (session attribution), item 5 (runtime integration). Missing native proof must remain explicit.
 
 ## Log
 
@@ -64,3 +64,17 @@ Commit `ea21596` contains the coherent setup behavior, assets, tests and docs (7
 
 ### L8 — Review closure and remaining proof
 Verification-log commit: `c296f37`. The user granted candidate-specific native review. All four lenses completed; review approved the committed candidate through `c296f37`. Exact acknowledgement succeeded for lineage `review-d9d2ac4450c3a69e`, target `sha256:41048d432578099780f216161d6be7f3de1292dff6942c4b37339df4a7365ce5`; terminal authority was burned. Non-blocking advisory R3-1: the late-conflict test exercises preflight, not a failure after publication; deterministic partial-publication/retry coverage is follow-up work, not a correction of this reviewed candidate. Both verification scratch directories were removed (read-only Go cache directories required owner permission restoration before cleanup). No native host/model smoke or Engram continuity proof has run. Next decision: authorize a bounded real OpenCode smoke in an isolated project, with explicit host authentication/model use and isolated memory storage; no global configuration changes or production memory writes.
+
+### L9 — Native smoke authorization
+"vamos con el siguiente paso"
+
+The user accepted the immediately preceding proposal: run a real OpenCode smoke in a temporary project, using OpenCode's configured model and authentication, with isolated memory and no global configuration changes. This supersedes L2's prohibition on model invocations only within that bounded smoke scope. Parent observed OpenCode v2.2.6 and its native `run` flags. The source worktree was clean at `568455c`; remaining work stays on the same feature branch. Delegate the long native probe as command execution, not implementation. Before starting a host process, establish memory storage isolation; if unavailable, stop that probe rather than touching production memory. No authentication copying, permission bypass, production memory writes or global setup is authorized.
+
+### L10 — Native smoke results and remaining decision
+The initial preflight stopped before launch because the parent's scratch-only requirement also isolated OpenCode's saved authentication database. That constraint exceeded the user's temporary-project/isolated-memory scope; the corrected probe allowed normal native OpenCode session state, with no credential copying or global configuration changes.
+
+OpenCode v2.2.6 selected `koard` and `opencode/tidepool-alpha-free` without forced agent/model options. The installed skill path and completed `koard-explorer` subagent were confirmed through structured events. The primary implemented a Python status-filter fixture, observed RED (five tests, three errors), then GREEN (five passing tests). Both the worker and parent independently reran `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v`: five tests passed. Source assets and checked global config hashes were unchanged. The repository only contains tracking/documentation changes from this probe.
+
+The isolated Engram store contains one authoritative root-attributed session and one synthetic prompt, no child session, and zero observations. The root turn reached the 420-second harness limit and was terminated (host exit 143, outcome interrupted) before memory save/recall. The child reported write capability unavailable and no canary appeared, but there was no actual attempted-write denial. These are partial results, not end-to-end approval. All owned host/Engram process groups stopped and isolated ports closed. External scratch remains retained for the unresolved continuation; its locator is in the session handoff.
+
+Remaining decision: authorize one additional bounded continuation for the missing memory save/recall and permission evidence, or accept these as deferred proof. No automatic repeated model attempts or model switch was performed. Automatic Engram installation is still not implemented.

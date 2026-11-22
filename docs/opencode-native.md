@@ -76,6 +76,25 @@ activation, delegation, permission enforcement and memory recovery remain
 separate acceptance checks. This slice is not yet a verified end-to-end native
 development installation.
 
+### Observed native smoke (2026-11-22)
+
+An isolated fixture on OpenCode v2.2.6 selected `koard` without an agent or model
+override; native model selection resolved to `opencode/tidepool-alpha-free`.
+Structured events confirmed loading the installed `koard-odd` skill and a
+completed `koard-explorer` delegation. The primary implemented status filtering
+and ran a failing test followed by five passing tests; an independent rerun of
+those five tests also passed. The shipped assets and global configuration files
+checked before and after the probe remained byte-identical.
+
+The owned, isolated Engram store recorded the actual root session and synthetic
+prompt, with no child session registration. However, the host turn did not finish
+within 420 seconds and was interrupted before any observation save or resumed
+recall. The explorer reported that writing was unavailable and created no canary;
+there was no attempted write with an observed denial. Memory save/recovery and
+that effective-permission probe therefore remain unverified. No global setup or
+production-memory writes were part of the smoke. This evidence does not establish
+automatic Engram installation, other models, or other OpenCode versions.
+
 Configuration follows the official OpenCode V2 [agent](https://opencode.ai/docs/agents)
 and [configuration](https://opencode.ai/docs/config) contracts. Runtime upgrades
 need renewed compatibility evidence; other CLIs are not supported by setup yet.
