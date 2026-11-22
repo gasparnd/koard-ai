@@ -4,6 +4,13 @@ Koard separates workflow semantics from model and runtime integrations. The core
 
 ## Component model
 
+Native host integration is a separate path: `nativeintegration.Setup` installs
+an explicit adapter-owned asset bundle without replacing destination files.
+OpenCode's `NativeBundle` supplies native agent/configuration/skill assets;
+it does not invoke or weaken the proposal execution adapter. Host permissions
+govern native edits, which are outside existing snapshot receipt coverage.
+See [native setup](opencode-native.md) for the hybrid boundary and proof limits.
+
 ```text
 CLI
  └── Application services
