@@ -12,6 +12,12 @@ Koard is building its first governed orchestration slice. The current CLI can in
 
 ## Quick start
 
+For normal OpenCode conversations, `koard native setup --runtime opencode
+--dry-run` previews a project-local orchestrator and ODD skill bundle. The
+[native setup guide](docs/opencode-native.md) explains installation, existing
+configuration conflicts, Engram prerequisites and pending real-session proof.
+This path is separate from the proposal-only workflows below.
+
 Claude Code is also available through `provider: claude`: Koard delivers prepared
 text context to a fresh, tool-free process using native login. It does not browse
 the repository or use an OS sandbox. See the [Claude walkthrough](docs/claude-adapter.md)

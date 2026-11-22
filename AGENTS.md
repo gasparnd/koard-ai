@@ -26,6 +26,11 @@ This repository is developed by humans and AI agents. Before changing code, read
 
 Load a matching skill before its assigned task; discovery alone is not activation.
 These files do not expand capabilities or replace the caller's output contract.
+
+The native bundle also ships `koard-odd` at
+`internal/adapters/opencode/nativeassets/skills/koard-odd/SKILL.md`, with its
+onboarding guide beside it. It is a distribution asset, not an active project
+skill until explicitly installed through native setup.
 See `docs/skills.md` for discovery, validation and contribution guidance.
 
 ## Current verification

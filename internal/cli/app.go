@@ -81,6 +81,8 @@ func Run(args []string, cwd string, stdout, stderr io.Writer) int {
 		return runSkill(args[1:], cwd, stdout, stderr)
 	case "sync":
 		return runSync(args[1:], cwd, stdout, stderr)
+	case "native":
+		return runNative(args[1:], cwd, stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "koard: unknown command %q\n", args[0])
 		fmt.Fprintln(stderr, "Run 'koard help' to see available commands.")
@@ -139,6 +141,8 @@ Usage:
 Commands:
   init       Create the project-level Koard structure
   doctor     Check the local Koard configuration
+  native setup --runtime opencode [--dry-run]
+             Install non-overwriting project-local native orchestration assets
   sync [--dry-run]
              Synchronize explicitly configured skill projections without overwrites
   run --workflow <id> --task <id> --objective <text> [--policy fixed|planned]

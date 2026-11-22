@@ -84,6 +84,12 @@ not update the Koard executable or rewrite native configuration files.
 
 ## Extended portability
 
+- [x] Explicit project-local OpenCode native setup with preview, non-overwrite
+  behavior, orchestrator/inspection agents and a native ODD skill.
+- [ ] Verify native activation, delegation and an implemented feature in a real session.
+- [ ] Automatic Engram host-session integration and verified continuity.
+- [ ] Native configuration upgrades and ownership-aware removal.
+
 - [x] Claude Code tool-free adapter with native login, prepared text context and
   immutable review bytes. Local fake-process validation only; see [limits](claude-adapter.md).
 - [ ] Copilot adapter.
