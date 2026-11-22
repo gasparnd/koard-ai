@@ -25,7 +25,7 @@ Implementation approach: project-local, explicit setup with preview, non-overwri
 
 - T1 [S1,S3] Native setup with public-interface tests and documentation — route: inline; status: setup and native activation verified; commit: `ea21596`. Risk: item 5 (installer/configuration behavior), item 2 (filesystem confinement).
 - T2 [S1,S2] Native orchestrator and bounded role/skill assets with tests and usage documentation — route: inline; status: native skill loading, delegation and fixture implementation verified; effective denial probe pending T3; commit: `ea21596`. Risk: item 3 (consumed instructions), item 2 (authority boundaries).
-- T3 [S1,S2,S3] Verify Engram host-binding integration and native end-to-end behavior; implement only evidence-supported wiring — route: inline, native probe execution delegated by the per-action rule; status: partial, blocked after bounded host timeout; commit: pending. Risk: item 2 (session attribution), item 5 (runtime integration). Missing native proof must remain explicit.
+- T3 [S1,S2,S3] Verify Engram host-binding integration and native end-to-end behavior; implement only evidence-supported wiring — route: inline, native probe execution delegated by the per-action rule; status: partial, save/search continuity verified, full retrieval and denial proof unavailable after bounded turns; commit: pending. Risk: item 2 (session attribution), item 5 (runtime integration). Missing native proof must remain explicit.
 
 ## Log
 
@@ -78,3 +78,15 @@ OpenCode v2.2.6 selected `koard` and `opencode/tidepool-alpha-free` without forc
 The isolated Engram store contains one authoritative root-attributed session and one synthetic prompt, no child session, and zero observations. The root turn reached the 420-second harness limit and was terminated (host exit 143, outcome interrupted) before memory save/recall. The child reported write capability unavailable and no canary appeared, but there was no actual attempted-write denial. These are partial results, not end-to-end approval. All owned host/Engram process groups stopped and isolated ports closed. External scratch remains retained for the unresolved continuation; its locator is in the session handoff.
 
 Remaining decision: authorize one additional bounded continuation for the missing memory save/recall and permission evidence, or accept these as deferred proof. No automatic repeated model attempts or model switch was performed. Automatic Engram installation is still not implemented.
+
+### L11 — Bounded continuation authorization
+"si"
+
+The user accepted two brief additional native turns, each limited to 180 seconds, with the same model, to finish memory and permission checks. Reuse the isolated fixture/store and actual returned root session; do not change global configuration, copy credentials, write production memory, switch models, or relax permissions. Branch remains `feat/opencode-native-integration`, baseline `49a0513`. Stop after the two-turn budget or an unresolved failure; report remaining proof rather than launching further attempts.
+
+### L12 — Follow-up evidence and exhausted proof budget
+The same native Koard session and `opencode/tidepool-alpha-free` model performed both authorized turns. Save finished within 180 seconds with host exit 0: actual `mem_save` stored observation 1, with the model omitting session identity and the host adapter injecting its authoritative root continuation (`:resume:2`). Independent isolated-database inspection confirmed the fixture project/directory and one observation. The next turn executed `mem_search`, returning that observation and its ordering fact, but reached 180 seconds and exited 143 before `mem_get_observation` or a new child permission probe.
+
+The isolated store had three root-lineage sessions, three attributed prompts, one observation and no child registrations. The documented agent-inspection API request returned HTTP 404, not permission evidence. Parent spot-checked the saved reports and read-only isolated observation count. Global configuration and shipped asset hashes remained unchanged. All owned host/Engram processes stopped and all isolated ports closed. No further model calls or source changes occurred. After preserving the sanitized findings, the parent removed the owned smoke scratch, including the synthetic memory database. Ordinary native session history remains in the host's store; no global data was deleted.
+
+The result proves host-attributed save and persisted search across continuations with an already installed Engram adapter. It does not prove full retrieval, attempted-write denial or automatic Engram installation. The feature remains partial; do not mark S2/S3 fully verified or treat instruction text as executable enforcement. Remaining decision: explicitly defer the missing proof or authorize a separately scoped investigation; no automatic retry loop.

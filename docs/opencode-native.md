@@ -95,6 +95,20 @@ that effective-permission probe therefore remain unverified. No global setup or
 production-memory writes were part of the smoke. This evidence does not establish
 automatic Engram installation, other models, or other OpenCode versions.
 
+Two authorized follow-up turns reused the same model and isolated store, with
+180-second limits. The first completed successfully: a real `mem_save` stored
+one synthetic observation, attributed by the host adapter to its authoritative
+root-session continuation. The second made a real `mem_search` that returned
+that observation and fact, demonstrating persisted-memory access across
+continuations, but timed out before full `mem_get_observation` retrieval or the
+permission canary. A separate read-only agent-inspection API request returned
+HTTP 404. No additional model attempts were made. Global configuration and
+shipped bundle hashes remained unchanged, and all owned processes stopped.
+
+Thus save and search continuity are verified with the already installed Engram
+host adapter; full retrieval and attempted-write denial remain unverified.
+This does not add automatic Engram configuration to Koard's installer.
+
 Configuration follows the official OpenCode V2 [agent](https://opencode.ai/docs/agents)
 and [configuration](https://opencode.ai/docs/config) contracts. Runtime upgrades
 need renewed compatibility evidence; other CLIs are not supported by setup yet.
