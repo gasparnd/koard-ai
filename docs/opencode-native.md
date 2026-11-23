@@ -18,6 +18,42 @@ with its guide under `.opencode/skills/`. Open a fresh OpenCode session and
 confirm that `koard` is selected. Existing sessions keep their selected agent.
 Ask for a bounded feature or explanation normally.
 
+### Configure Engram at installation
+
+For a fresh native installation with Engram 3.7.2 already on PATH:
+
+```sh
+koard native setup --runtime opencode --with-engram --dry-run
+koard native setup --runtime opencode --with-engram
+```
+
+This adds the official, pinned Engram plugin at `.opencode/plugins/engram.ts`,
+its MIT license/provenance under `.opencode/engram/`, and project-local
+`mcp.servers.engram` configuration. No prior Engram host integration is needed.
+Installation is offline and invokes only `engram version`, including in preview;
+it does not download programs, run `engram setup`, start a server or open memory
+storage. Missing binaries, other versions and conflicting nonblank `ENGRAM_BIN`
+overrides refuse before publishing files. The currently verified combination is
+Engram 3.7.2 and OpenCode 2.2.6; other Engram versions require a bundle update.
+
+Both the plugin and MCP use `engram` on the OpenCode server's PATH. Leave
+`ENGRAM_BIN` unset or exactly `engram`. They inherit the host's memory environment;
+this does not create an isolated store. When the host loads the plugin, provider
+behavior includes starting its local server when necessary, root-session
+registration, prompt capture and import of `.engram/manifest.json` when present.
+Do not point the plugin and MCP at different stores or endpoints.
+
+**Configured is not activated or verified.** Inspect plugin and MCP status in
+OpenCode before relying on continuity. OpenCode 2.2.6 keeps the first plugin ID,
+so an existing global Engram plugin can win and mark the project copy duplicate.
+Koard does not inspect every ambient plugin or remove global configuration.
+A shared server can also have a different PATH/environment from the installer.
+
+The opt-in uses the same no-overwrite contract. An earlier assets-only Koard
+configuration differs and therefore refuses; automatic upgrades/merging remain
+unimplemented. Without `--with-engram`, the original six-file bundle and its
+dependency-free setup behavior are unchanged.
+
 The primary agent works inline by default, uses native tools, and delegates
 bounded inspection to `koard-explorer` or `koard-verifier`. Those children deny
 tools by default and allow local discovery and skill loading; they cannot run
@@ -61,11 +97,12 @@ gates. A receipt binds the exact stored snapshot; it does not approve arbitrary
 native edits. Publishing and destructive actions remain separate user decisions.
 No new live-edit receipt bridge is implemented by this setup command.
 
-Engram must already have a working host integration with authoritative session
-attribution. Setup does not configure MCP, register/end sessions or reuse the
-per-run Koard Engram subprocess. Missing tools or attribution must be reported
-as unavailable continuity, not successful persistence. Automatic Engram host
-setup remains pending.
+Engram needs a working host integration with authoritative session attribution.
+`--with-engram` configures its official plugin and MCP locally; assets-only setup
+still requires an independently configured integration. Session registration and
+closure belong to the host plugin, not setup or Koard's per-run Engram subprocess.
+Missing tools or attribution must be reported as unavailable continuity, not
+successful persistence. Installation alone does not establish runtime proof.
 
 ## Evidence and limits
 
