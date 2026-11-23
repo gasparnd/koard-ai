@@ -14,8 +14,8 @@ User selected "Defer publication and retain local release preparation." after no
 Prepare and commit locally; do not push, tag remotely, or publish. Record the missing login and exact remaining publication steps.
 
 ## Tasks
-- T1 [S1,S2] Version, license, deterministic packages and install documentation — inline; implemented and unit-checked; commit: this work unit.
-- T2 [S1,S2,S3] Build/check packages, independent verification, local commit and handoff — inline with per-action checks and independent verifier for item 5; suite/vet passed, artifact checks pending.
+- T1 [S1,S2] Version, license, deterministic packages and install documentation — inline; implemented and unit-checked; commits: `3bc4839`, `b5e7ec6`.
+- T2 [S1,S2,S3] Build/check packages, independent verification, local commit and handoff — inline with per-action checks and independent verifier for item 5; functional and independent checks complete; local artifacts retained; native review assessment pending.
 
 ## Log
 ### L1 — Authorization
@@ -32,3 +32,13 @@ Risk: item 5 (release packaging); independent verification required. No model ca
 
 ### L3 — Implementation and ordinary checks
 Version aliases failed with `0.1.0-dev` before the constant change, then all passed with literal `0.1.0`. Package tests initially failed because the implementation was absent, then passed: deterministic archive bytes, ordered entries, executable/data modes, notices, usage and existing-output preservation. Final source formatting preceded checks. `go test ./...` passed (24 packages, 4 without tests); `go vet ./...` and `git diff --check` passed. `KOARD_NATIVE_PROOF` was unset: no live models/services were launched. This coherent release-preparation unit keeps packaging, licensing, tests and docs together; copied distribution assets are not rewritten. Rollback is the version constant and these added release surfaces, without altering provider behavior. Packaging requires a clean committed tree; four-target builds and host smoke follow the implementation commit.
+
+### L4 — Package evidence and corrected preparation failures
+Initial packaging refused before output creation because Homebrew places Go's LICENSE beside `libexec`, not inside GOROOT. A layout regression test failed before the helper existed, then passed for upstream and Homebrew layouts while rejecting an unrelated parent. Commit `b5e7ec6` contains the fix; full suite/vet passed again.
+
+From `b5e7ec6`, two offline builds produced four byte-identical archives and checksum manifests. Each archive has ten safe regular entries with normalized ownership/timestamps/modes, exact third-party notice bytes and source/toolchain provenance. Host binaries report `0.1.0` for all three aliases. Assets-only and Engram previews create nothing; initial installations succeed, identical repeats preserve bytes/modes/mtimes, and strict skill validation passes. Conflict checks refuse and preserve files for both variants. The public packager rejects an existing output directory without altering it. A smoke script initially looked for `plugin` instead of `plugins`; parent verified the actual pinned plugin and completed remaining checks. A parent rejection probe initially lacked the module cache after HOME isolation; explicit existing GOPATH fixed only that probe environment. No release artifacts were changed by those probe failures.
+
+Artifacts remain ignored under `dist/0.1.0`, built from `b5e7ec6b38ad9dcf037915448908a3cc56d30a65`. Only Darwin ARM64 was executed; other architectures were inspected as correctly targeted Mach-O/ELF binaries. No signing, notarization, Windows, model/service integration rerun or publication is claimed.
+
+### L5 — Independent verification and local handoff
+Independent verification found no blockers for S1/S2/S3. It inspected every archive/license/checksum and ran 34 baseline/current public CLI invocations in isolated state, including the documented install guard, preview, install, repeat, strict skill validation, malformed input and conflict preservation. The baseline/current difference was the intended version string. Existing native setup tests already cover the proposed preservation scenarios; no production installer change or duplicate test suite was added. Cleanup on build failure was inspected structurally, not fault-injected. Parent spot checks and final archive checksums passed. Owned build/rebuild, verifier, test and temporary GitHub CLI directories were removed; only the final ignored `dist/0.1.0` deliverables remain. No tag, push or release was created. Future publication must authenticate GitHub CLI and use the archives' exact `BUILD.txt` commit, or rebuild and verify from a newer approved commit before tagging it.
