@@ -54,6 +54,12 @@ events missed during a V2 event-stream disconnection are not replayed, so prompt
 capture may have gaps without a degraded warning. Configuration tests do not
 cover recovery from that runtime failure.
 
+A bounded model-free probe of the generated bundle installed successfully and
+created a real OpenCode root session, but plugin/MCP metadata remained empty and
+Engram did not register that root during the 30-second observation. A later log
+showed an MCP process spawn, not a confirmed connection. Native activation and
+root attribution therefore remain unverified; the cause has not been established.
+
 The opt-in uses the same no-overwrite contract. An earlier assets-only Koard
 configuration differs and therefore refuses; automatic upgrades/merging remain
 unimplemented. Without `--with-engram`, the original six-file bundle and its
