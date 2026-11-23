@@ -10,8 +10,9 @@ This is not autonomous development or delivery. See [odd-runtime.md](odd-runtime
 `koard native setup --runtime opencode` can prepare project-local instructions
 for ordinary host conversations; it does not require `odd run` for each task.
 It is not installed into this checkout automatically. See the
-[native guide](opencode-native.md) for conflict handling and pending activation
-and memory evidence. The persisted workflow path above remains independent.
+[native guide](opencode-native.md) for conflict handling, bounded activation
+and memory evidence, and remaining recovery limits. The persisted workflow path
+above remains independent.
 
 The repository exposes its intent through:
 

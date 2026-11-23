@@ -86,10 +86,11 @@ not update the Koard executable or rewrite native configuration files.
 
 - [x] Explicit project-local OpenCode native setup with preview, non-overwrite
   behavior, orchestrator/inspection agents and a native ODD skill.
-- [ ] Verify native activation, delegation and an implemented feature in a real session.
+- [x] Verify native activation, delegation and a bounded test-only change in a real session.
 - [x] Optional project-local Engram plugin/MCP configuration using pinned official
   assets and preinstalled Engram 3.7.2, without global setup.
-- [ ] Complete native Engram host-session continuity proof for the installed bundle.
+- [x] Verify native Engram tool-write binding and recall in a distinct host session.
+- [ ] Verify reconnect recovery and repeated-run native continuity.
 - [ ] Native configuration upgrades and ownership-aware removal.
 
 - [x] Claude Code tool-free adapter with native login, prepared text context and

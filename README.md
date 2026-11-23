@@ -12,10 +12,14 @@ Koard is building its first governed orchestration slice. The current CLI can in
 
 ## Quick start
 
+For installable `0.1.0` packages, checksums, MIT licensing and platform limits,
+see the [release installation guide](docs/releases/0.1.0.md). Publication is
+separate from local package preparation.
+
 For normal OpenCode conversations, `koard native setup --runtime opencode
 --dry-run` previews a project-local orchestrator and ODD skill bundle. The
 [native setup guide](docs/opencode-native.md) explains installation, existing
-configuration conflicts, Engram prerequisites and pending real-session proof.
+configuration conflicts, Engram prerequisites and bounded real-session proof.
 Add `--with-engram` to configure the pinned official Engram plugin and MCP in
 the project. Engram 3.7.2 must already be on PATH; no global setup or dependency
 download occurs. Existing differing native configurations are not overwritten.
