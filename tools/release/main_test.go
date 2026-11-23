@@ -66,3 +66,33 @@ func TestReleaseUsageAndExistingOutput(t *testing.T) {
 		t.Fatal("existing output changed")
 	}
 }
+
+func TestGoLicenseLayouts(t *testing.T) {
+	for _, name := range []string{"upstream", "homebrew", "unrelated-parent"} {
+		t.Run(name, func(t *testing.T) {
+			parent := t.TempDir()
+			root := filepath.Join(parent, "go")
+			if name == "homebrew" {
+				root = filepath.Join(parent, "libexec")
+			}
+			if err := os.Mkdir(root, 0755); err != nil {
+				t.Fatal(err)
+			}
+			want := filepath.Join(root, "LICENSE")
+			if name != "upstream" {
+				want = filepath.Join(parent, "LICENSE")
+			}
+			if err := os.WriteFile(want, []byte("Go license"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			got, err := goLicensePath(root)
+			if name == "unrelated-parent" {
+				if err == nil {
+					t.Fatal("accepted unrelated parent license")
+				}
+			} else if err != nil || got != want {
+				t.Fatalf("got %q, %v; want %q", got, err, want)
+			}
+		})
+	}
+}

@@ -34,6 +34,22 @@ func output(name string, args ...string) (string, error) {
 	return strings.TrimSpace(string(b)), nil
 }
 
+func goLicensePath(root string) (string, error) {
+	path := filepath.Join(root, "LICENSE")
+	if _, err := os.Stat(path); os.IsNotExist(err) && filepath.Base(root) == "libexec" {
+		// Homebrew keeps distribution notices beside, rather than inside, libexec.
+		path = filepath.Join(filepath.Dir(root), "LICENSE")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("Go license is not a regular file: %s", path)
+	}
+	return path, nil
+}
+
 func run(args []string) (err error) {
 	if len(args) != 1 {
 		return fmt.Errorf("usage: go run ./tools/release <new-output-directory> (from repository root)")
@@ -66,6 +82,10 @@ func run(args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	goLicense, err := goLicensePath(runtime.GOROOT())
+	if err != nil {
+		return err
+	}
 	files := map[string][]byte{}
 	for name, path := range map[string]string{
 		"LICENSE": "LICENSE", "INSTALL.md": "docs/releases/0.1.0.md",
@@ -73,7 +93,7 @@ func run(args []string) (err error) {
 		"licenses/engram-provenance.md": "internal/adapters/opencode/engramassets/README.md",
 		"licenses/yaml-Apache-2.0.txt":  filepath.Join(yaml, "LICENSE"),
 		"licenses/yaml-NOTICE.txt":      filepath.Join(yaml, "NOTICE"),
-		"licenses/go-BSD.txt":           filepath.Join(runtime.GOROOT(), "LICENSE"),
+		"licenses/go-BSD.txt":           goLicense,
 		"licenses/go-PATENTS.txt":       filepath.Join(runtime.GOROOT(), "PATENTS"),
 	} {
 		files[name], err = os.ReadFile(path)
