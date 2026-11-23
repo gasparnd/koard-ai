@@ -49,6 +49,11 @@ so an existing global Engram plugin can win and mark the project copy duplicate.
 Koard does not inspect every ambient plugin or remove global configuration.
 A shared server can also have a different PATH/environment from the installer.
 
+Static review of the pinned plugin also identified a continuity limitation:
+events missed during a V2 event-stream disconnection are not replayed, so prompt
+capture may have gaps without a degraded warning. Configuration tests do not
+cover recovery from that runtime failure.
+
 The opt-in uses the same no-overwrite contract. An earlier assets-only Koard
 configuration differs and therefore refuses; automatic upgrades/merging remain
 unimplemented. Without `--with-engram`, the original six-file bundle and its
