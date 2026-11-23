@@ -54,11 +54,25 @@ events missed during a V2 event-stream disconnection are not replayed, so prompt
 capture may have gaps without a degraded warning. Configuration tests do not
 cover recovery from that runtime failure.
 
-A bounded model-free probe of the generated bundle installed successfully and
-created a real OpenCode root session, but plugin/MCP metadata remained empty and
-Engram did not register that root during the 30-second observation. A later log
-showed an MCP process spawn, not a confirmed connection. Native activation and
-root attribution therefore remain unverified; the cause has not been established.
+A first bounded model-free probe created a root before waiting for plugin
+activation. Metadata was initially empty and Engram did not register that root.
+OpenCode 2.2.6 creates sessions without waiting for location plugin activation;
+the plugin's live subscription does not replay an earlier creation event.
+That ordering was not a valid activation/registration check.
+
+A corrected isolated probe waited until location-scoped metadata reported the
+installed local `engram` plugin as `active`, then created a real root and admitted
+a synthetic prompt with `resume: false`. Engram registered that root with the
+exact fixture directory. Read-only inspection of the stopped temporary database
+confirmed one prompt with matching content, project, runtime session and host
+inbox message identity. Host token/cost counters stayed zero and no assistant
+messages were produced. Owned processes stopped within 1.68 seconds.
+
+The harness exited nonzero while decoding an optional session-log response;
+the parent verified the persisted evidence directly without restarting anything.
+This proves local plugin activation, root registration and prompt attribution
+for the tested versions, not model-tool write binding, full recall, MCP connection
+readiness or reconnect recovery. The earlier warning about continuity gaps stands.
 
 The opt-in uses the same no-overwrite contract. An earlier assets-only Koard
 configuration differs and therefore refuses; automatic upgrades/merging remain
