@@ -11,6 +11,12 @@ it does not invoke or weaken the proposal execution adapter. Host permissions
 govern native edits, which are outside existing snapshot receipt coverage.
 See [native setup](opencode-native.md) for the hybrid boundary and proof limits.
 
+The optional `NativeEngramBundle` composes pinned, unchanged provider plugin
+bytes and a local MCP entry with that same bundle. The CLI checks the installed
+Engram version through its adapter before publishing; core and proposal adapters
+are unchanged. Native session attribution remains owned by Engram's plugin.
+Neither file installation nor dependency preflight proves host activation.
+
 ```text
 CLI
  └── Application services
