@@ -10,7 +10,100 @@ Koard is building its first governed orchestration slice. The current CLI can in
 
 `koard review apply --workflow <id>` requires the same approved, non-stale receipt and writes that candidate's exact bytes atomically to the workspace, with idempotency and interruption recovery derived from deterministic content. It never invokes git — delivery stays a separate, human-driven decision. See `docs/controlled-mutation.md`. Local scaffolding commands (`init` and `skill create`) create project files separately; they do not apply workflow candidates. Engram memory and skill draft generation are described below.
 
-## Quick start
+## Install Koard step by step
+
+The `release/0.1.0` branch is available on GitHub. Downloadable release archives
+have not been published yet; use the source installation below. Koard is MIT
+licensed, with separate notices for bundled third-party components.
+
+### 1. Check prerequisites
+
+You need Git and Go 1.23 or newer to build Koard. Release packages were built
+with Go 1.27.4. The commands below use a POSIX shell on macOS or Linux.
+
+```sh
+git --version
+go version
+```
+
+For native conversations, install and configure OpenCode separately, including
+your model provider and authentication. OpenCode 2.2.6 is the tested version.
+Only macOS ARM64 has received runtime validation for this release; Linux and
+macOS AMD64 packages have been cross-compiled and inspected.
+
+### 2. Download and build Koard
+
+Run this from the directory where you keep source checkouts, not inside the
+project where you want to use Koard:
+
+```sh
+git clone --branch release/0.1.0 --single-branch https://github.com/gasparnd/koard-ai.git
+cd koard-ai
+go mod download
+mkdir -p bin
+go build -o bin/koard ./cmd/koard
+./bin/koard --version
+```
+
+Expected output: `0.1.0`. Stop if any command fails. The first dependency download
+requires network access. Keep this checkout and its license notices.
+
+### 3. Put the binary on your PATH
+
+From the same checkout:
+
+```sh
+mkdir -p "$HOME/.local/bin"
+if [ -e "$HOME/.local/bin/koard" ] || [ -L "$HOME/.local/bin/koard" ]; then
+  printf '%s\n' 'An existing Koard installation was found; review it before replacing it.'
+else
+  install -m 755 bin/koard "$HOME/.local/bin/koard"
+fi
+export PATH="$HOME/.local/bin:$PATH"
+koard --version
+```
+
+The example does not replace an existing installation. Confirm that the command
+prints `0.1.0` before continuing. To keep the PATH change in new terminals, add
+`export PATH="$HOME/.local/bin:$PATH"` to your shell configuration (for example,
+`~/.zshrc` for interactive Zsh or `~/.bashrc` for interactive Bash).
+
+### 4. Install native assets in your project
+
+Change to the Git project where you want to use Koard, then preview the changes:
+
+```sh
+cd /path/to/your/project
+koard native setup --runtime opencode --dry-run
+```
+
+Review the preview, then install:
+
+```sh
+koard native setup --runtime opencode
+```
+
+This creates project-local configuration, agents and skills under `.opencode/`.
+You do not need `koard init` for this native path. Existing differing files are
+not overwritten or merged; if setup reports a conflict, stop and consult the
+[native setup guide](docs/opencode-native.md) rather than deleting your config.
+
+**Optional memory:** before installing native assets, decide whether you want
+Engram. If so, install Engram 3.7.2 separately and ensure it is on PATH. Use
+`--with-engram` on both the preview and installation commands above. This adds
+the pinned plugin and MCP configuration; it does not install Engram itself or
+create an isolated memory store. See the [memory setup details](docs/opencode-native.md#configure-engram-at-installation).
+
+### 5. Start using Koard
+
+Open a fresh OpenCode session in your project and select the `koard` agent.
+Ask for a bounded task normally; you do not need to run `koard odd run` for
+each native conversation. Existing sessions keep their previously selected agent.
+
+For archive checksums, package installation after publication, and release
+limitations, see the [0.1.0 release guide](docs/releases/0.1.0.md).
+
+## Other workflows and configuration
 
 For installable `0.1.0` packages, checksums, MIT licensing and platform limits,
 see the [release installation guide](docs/releases/0.1.0.md). Publication is
