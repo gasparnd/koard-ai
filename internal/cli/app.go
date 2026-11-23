@@ -10,7 +10,7 @@ import (
 	"github.com/koard-ai/koard/internal/config"
 )
 
-const Version = "0.1.0-dev"
+const Version = "0.1.0"
 
 var projectDirectories = []string{
 	".koard/agents",

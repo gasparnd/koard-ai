@@ -74,6 +74,17 @@ This proves local plugin activation, root registration and prompt attribution
 for the tested versions, not model-tool write binding, full recall, MCP connection
 readiness or reconnect recovery. The earlier warning about continuity gaps stands.
 
+A later isolated real-project pilot also verified MCP readiness, native
+development of two interceptor regression tests, local GPT-OSS review, and an
+actual Engram tool write attributed to its OpenCode root. A distinct session
+retrieved the saved verification phrase through context/search/full-observation
+tools without receiving it in the recall prompt. The controller and an
+independent verifier inspected the isolated stored binding and retrieval.
+Evidence was committed in the pilot repository as `79e72b6` and `17c7a49`;
+the tested bundle came from Koard `44c8cb6`. This is bounded happy-path evidence,
+not reconnect recovery or a production-feature reliability guarantee. See
+[0.1.0 scope](releases/0.1.0.md) for distribution limits.
+
 The opt-in uses the same no-overwrite contract. An earlier assets-only Koard
 configuration differs and therefore refuses; automatic upgrades/merging remain
 unimplemented. Without `--with-engram`, the original six-file bundle and its
