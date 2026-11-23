@@ -15,7 +15,7 @@ Prepare and commit locally; do not push, tag remotely, or publish. Record the mi
 
 ## Tasks
 - T1 [S1,S2] Version, license, deterministic packages and install documentation — inline; implemented and unit-checked; commits: `3bc4839`, `b5e7ec6`.
-- T2 [S1,S2,S3] Build/check packages, independent verification, local commit and handoff — inline with per-action checks and independent verifier for item 5; functional and independent checks complete; local artifacts retained; native review assessment pending.
+- T2 [S1,S2,S3] Build/check packages, independent verification, local commit and handoff — inline with per-action checks and independent verifier for item 5; complete locally, publication deferred; evidence commit: `5be1ade`, closure in this documentation commit.
 
 ## Log
 ### L1 — Authorization
@@ -28,7 +28,7 @@ Prepare and commit locally; do not push, tag remotely, or publish. Record the mi
 ### L2 — Initial evidence
 Current version is `0.1.0-dev`. No release packaging or root license exists. Native OpenCode assets are embedded in the binary. The linked YAML v4 dependency supplies Apache-2.0 LICENSE/NOTICE; the embedded Engram plugin has its own MIT license/provenance. Module identity differs from the GitHub repository, so document clone/tag/local build rather than an unverified `go install` path. Go 1.27.4 is available. GitHub CLI 2.105.0 was downloaded to owned temporary storage and its official checksum verified; the authorized login does not exist. No remote publication or credential changes occurred.
 
-Risk: item 5 (release packaging); independent verification required. No model calls, service startup or new provider dependency is needed for release checks.
+Risk: item 5 (release packaging); independent verification completed. No model calls, service startup or new provider dependency is needed for release checks.
 
 ### L3 — Implementation and ordinary checks
 Version aliases failed with `0.1.0-dev` before the constant change, then all passed with literal `0.1.0`. Package tests initially failed because the implementation was absent, then passed: deterministic archive bytes, ordered entries, executable/data modes, notices, usage and existing-output preservation. Final source formatting preceded checks. `go test ./...` passed (24 packages, 4 without tests); `go vet ./...` and `git diff --check` passed. `KOARD_NATIVE_PROOF` was unset: no live models/services were launched. This coherent release-preparation unit keeps packaging, licensing, tests and docs together; copied distribution assets are not rewritten. Rollback is the version constant and these added release surfaces, without altering provider behavior. Packaging requires a clean committed tree; four-target builds and host smoke follow the implementation commit.
@@ -42,3 +42,6 @@ Artifacts remain ignored under `dist/0.1.0`, built from `b5e7ec6b38ad9dcf0379154
 
 ### L5 — Independent verification and local handoff
 Independent verification found no blockers for S1/S2/S3. It inspected every archive/license/checksum and ran 34 baseline/current public CLI invocations in isolated state, including the documented install guard, preview, install, repeat, strict skill validation, malformed input and conflict preservation. The baseline/current difference was the intended version string. Existing native setup tests already cover the proposed preservation scenarios; no production installer change or duplicate test suite was added. Cleanup on build failure was inspected structurally, not fault-injected. Parent spot checks and final archive checksums passed. Owned build/rebuild, verifier, test and temporary GitHub CLI directories were removed; only the final ignored `dist/0.1.0` deliverables remain. No tag, push or release was created. Future publication must authenticate GitHub CLI and use the archives' exact `BUILD.txt` commit, or rebuild and verify from a newer approved commit before tagging it.
+
+### L6 — Review closure
+The user selected "Revisar este cambio" for the high-risk release slice through `5be1ade`. Four native lenses approved it; the sole informational warning requests a future fault-injection test for cleanup after a subprocess build failure. No correction was opened. Exact acknowledgement of `review-88addda39f20a3bc` returned `authority: burned`. The local preparation is complete, not remotely published; the user's publication deferral remains controlling. Tests/builds were not repeated for this passive status-only closure. Final packages still identify their actual build source `b5e7ec6`, not the later evidence-only commits.
